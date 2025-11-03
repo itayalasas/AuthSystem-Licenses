@@ -1,4 +1,9 @@
-const SUBSCRIPTION_API_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/subscription-manager`;
+import { ConfigService } from './config';
+
+const getSubscriptionApiUrl = () => {
+  const supabaseUrl = ConfigService.getVariable('VITE_SUPABASE_URL');
+  return `${supabaseUrl}/functions/v1/subscription-manager`;
+};
 
 interface AuthData {
   user: {
@@ -83,7 +88,7 @@ class SubscriptionService {
   }
 
   async getPlans(): Promise<Plan[]> {
-    const response = await fetch(`${SUBSCRIPTION_API_URL}/plans`, {
+    const response = await fetch(`${getSubscriptionApiUrl()}/plans`, {
       headers: this.headers,
     });
 
@@ -96,7 +101,7 @@ class SubscriptionService {
   }
 
   async createOrGetTenant(authData: AuthData): Promise<{ tenant: Tenant; subscription: Subscription }> {
-    const response = await fetch(`${SUBSCRIPTION_API_URL}/tenants`, {
+    const response = await fetch(`${getSubscriptionApiUrl()}/tenants`, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify({
@@ -117,7 +122,7 @@ class SubscriptionService {
   }
 
   async getTenantByAppId(appId: string): Promise<Tenant> {
-    const response = await fetch(`${SUBSCRIPTION_API_URL}/tenants/${appId}`, {
+    const response = await fetch(`${getSubscriptionApiUrl()}/tenants/${appId}`, {
       headers: this.headers,
     });
 
@@ -130,7 +135,7 @@ class SubscriptionService {
   }
 
   async issueLicense(tenantId: string): Promise<{ license: License; subscription: Subscription; entitlements: Plan['entitlements'] }> {
-    const response = await fetch(`${SUBSCRIPTION_API_URL}/licenses/issue`, {
+    const response = await fetch(`${getSubscriptionApiUrl()}/licenses/issue`, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify({ tenant_id: tenantId }),
@@ -145,7 +150,7 @@ class SubscriptionService {
   }
 
   async validateLicense(jti: string): Promise<{ valid: boolean; data?: License }> {
-    const response = await fetch(`${SUBSCRIPTION_API_URL}/licenses/validate`, {
+    const response = await fetch(`${getSubscriptionApiUrl()}/licenses/validate`, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify({ jti }),
@@ -162,7 +167,7 @@ class SubscriptionService {
     providerSubscriptionId: string,
     providerCustomerId: string
   ): Promise<Subscription> {
-    const response = await fetch(`${SUBSCRIPTION_API_URL}/subscriptions/upgrade`, {
+    const response = await fetch(`${getSubscriptionApiUrl()}/subscriptions/upgrade`, {
       method: 'PUT',
       headers: this.headers,
       body: JSON.stringify({

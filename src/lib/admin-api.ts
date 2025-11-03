@@ -1,4 +1,9 @@
-const ADMIN_API_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-api`;
+import { ConfigService } from './config';
+
+const getAdminApiUrl = () => {
+  const supabaseUrl = ConfigService.getVariable('VITE_SUPABASE_URL');
+  return `${supabaseUrl}/functions/v1/admin-api`;
+};
 
 interface Application {
   id: string;
@@ -83,15 +88,16 @@ class AdminAPIService {
   }
 
   private get headers(): HeadersInit {
+    const supabaseAnonKey = ConfigService.getVariable('VITE_SUPABASE_ANON_KEY');
     return {
       'Content-Type': 'application/json',
       'X-Admin-Token': this.adminToken,
-      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      'Authorization': `Bearer ${supabaseAnonKey}`,
     };
   }
 
   async getApplications(): Promise<Application[]> {
-    const response = await fetch(`${ADMIN_API_URL}/applications`, {
+    const response = await fetch(`${getAdminApiUrl()}/applications`, {
       headers: this.headers,
     });
 
@@ -110,7 +116,7 @@ class AdminAPIService {
     webhook_url?: string;
     settings?: Record<string, any>;
   }): Promise<Application> {
-    const response = await fetch(`${ADMIN_API_URL}/applications`, {
+    const response = await fetch(`${getAdminApiUrl()}/applications`, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify(data),
@@ -125,7 +131,7 @@ class AdminAPIService {
   }
 
   async getTenants(): Promise<Tenant[]> {
-    const response = await fetch(`${ADMIN_API_URL}/tenants`, {
+    const response = await fetch(`${getAdminApiUrl()}/tenants`, {
       headers: this.headers,
     });
 
@@ -138,7 +144,7 @@ class AdminAPIService {
   }
 
   async getTenant(tenantId: string): Promise<Tenant> {
-    const response = await fetch(`${ADMIN_API_URL}/tenants/${tenantId}`, {
+    const response = await fetch(`${getAdminApiUrl()}/tenants/${tenantId}`, {
       headers: this.headers,
     });
 
@@ -160,7 +166,7 @@ class AdminAPIService {
     tax_id?: string;
     metadata?: Record<string, any>;
   }): Promise<Tenant> {
-    const response = await fetch(`${ADMIN_API_URL}/tenants`, {
+    const response = await fetch(`${getAdminApiUrl()}/tenants`, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify(data),
@@ -183,7 +189,7 @@ class AdminAPIService {
       notes?: string;
     }
   ): Promise<TenantApplication> {
-    const response = await fetch(`${ADMIN_API_URL}/tenants/${tenantId}/grant-access`, {
+    const response = await fetch(`${getAdminApiUrl()}/tenants/${tenantId}/grant-access`, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify(data),
@@ -199,7 +205,7 @@ class AdminAPIService {
 
   async revokeAccess(tenantId: string, applicationId: string): Promise<TenantApplication> {
     const response = await fetch(
-      `${ADMIN_API_URL}/tenants/${tenantId}/revoke-access/${applicationId}`,
+      `${getAdminApiUrl()}/tenants/${tenantId}/revoke-access/${applicationId}`,
       {
         method: 'PUT',
         headers: this.headers,
@@ -215,7 +221,7 @@ class AdminAPIService {
   }
 
   async changePlan(subscriptionId: string, planId: string): Promise<any> {
-    const response = await fetch(`${ADMIN_API_URL}/subscriptions/${subscriptionId}/change-plan`, {
+    const response = await fetch(`${getAdminApiUrl()}/subscriptions/${subscriptionId}/change-plan`, {
       method: 'PUT',
       headers: this.headers,
       body: JSON.stringify({ plan_id: planId }),
@@ -233,7 +239,7 @@ class AdminAPIService {
     subscriptionId: string,
     status: 'trialing' | 'active' | 'past_due' | 'canceled' | 'paused'
   ): Promise<any> {
-    const response = await fetch(`${ADMIN_API_URL}/subscriptions/${subscriptionId}/status`, {
+    const response = await fetch(`${getAdminApiUrl()}/subscriptions/${subscriptionId}/status`, {
       method: 'PUT',
       headers: this.headers,
       body: JSON.stringify({ status }),
@@ -248,7 +254,7 @@ class AdminAPIService {
   }
 
   async getAuditLog(limit = 50, offset = 0): Promise<AuditLog[]> {
-    const response = await fetch(`${ADMIN_API_URL}/audit-log?limit=${limit}&offset=${offset}`, {
+    const response = await fetch(`${getAdminApiUrl()}/audit-log?limit=${limit}&offset=${offset}`, {
       headers: this.headers,
     });
 
@@ -261,7 +267,7 @@ class AdminAPIService {
   }
 
   async getStats(): Promise<DashboardStats> {
-    const response = await fetch(`${ADMIN_API_URL}/stats`, {
+    const response = await fetch(`${getAdminApiUrl()}/stats`, {
       headers: this.headers,
     });
 
