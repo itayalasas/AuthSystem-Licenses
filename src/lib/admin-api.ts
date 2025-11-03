@@ -49,11 +49,13 @@ interface TenantApplication {
 
 interface Plan {
   id: string;
+  application_id: string;
   name: string;
   description: string;
   price: number;
   currency: string;
   billing_cycle: 'monthly' | 'annual';
+  trial_days?: number;
   entitlements: any;
 }
 
@@ -277,6 +279,90 @@ class AdminAPIService {
     const result = await response.json();
     if (!result.success) {
       throw new Error(result.error || 'Failed to fetch stats');
+    }
+
+    return result.data;
+  }
+
+  async getPlans(applicationId?: string): Promise<Plan[]> {
+    const url = applicationId
+      ? `${getAdminApiUrl()}/plans?application_id=${applicationId}`
+      : `${getAdminApiUrl()}/plans`;
+
+    const response = await fetch(url, {
+      headers: this.headers,
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to fetch plans');
+    }
+
+    return result.data;
+  }
+
+  async createPlan(data: {
+    application_id: string;
+    name: string;
+    description?: string;
+    price: number;
+    currency: string;
+    billing_cycle: 'monthly' | 'annual';
+    trial_days?: number;
+    entitlements?: any;
+  }): Promise<Plan> {
+    const response = await fetch(`${getAdminApiUrl()}/plans`, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify(data),
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to create plan');
+    }
+
+    return result.data;
+  }
+
+  async updateApplication(applicationId: string, data: {
+    name?: string;
+    webhook_url?: string;
+    settings?: Record<string, any>;
+    is_active?: boolean;
+  }): Promise<Application> {
+    const response = await fetch(`${getAdminApiUrl()}/applications/${applicationId}`, {
+      method: 'PUT',
+      headers: this.headers,
+      body: JSON.stringify(data),
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to update application');
+    }
+
+    return result.data;
+  }
+
+  async updateTenant(tenantId: string, data: {
+    name?: string;
+    organization_name?: string;
+    billing_email?: string;
+    domain?: string;
+    tax_id?: string;
+    status?: 'active' | 'suspended' | 'canceled';
+    metadata?: Record<string, any>;
+  }): Promise<Tenant> {
+    const response = await fetch(`${getAdminApiUrl()}/tenants/${tenantId}`, {
+      method: 'PUT',
+      headers: this.headers,
+      body: JSON.stringify(data),
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to update tenant');
     }
 
     return result.data;

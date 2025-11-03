@@ -21,6 +21,8 @@ import {
   User,
   BookOpen,
 } from 'lucide-react';
+import { TenantDetailModal } from '../components/TenantDetailModal';
+import { ApplicationModal } from '../components/ApplicationModal';
 
 export function Dashboard() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -35,6 +37,8 @@ export function Dashboard() {
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [showCreateTenantModal, setShowCreateTenantModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showApplicationModal, setShowApplicationModal] = useState(false);
+  const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
 
   useEffect(() => {
     const currentUser = AuthService.getUser();
@@ -97,6 +101,18 @@ export function Dashboard() {
 
   const handleLogout = () => {
     AuthService.logout();
+  };
+
+  const handleCreateApplication = async (data: any) => {
+    await adminApi.createApplication(data);
+    loadDashboardData();
+  };
+
+  const handleUpdateApplication = async (data: any) => {
+    if (selectedApplication) {
+      await adminApi.updateApplication(selectedApplication.id, data);
+      loadDashboardData();
+    }
   };
 
   if (loading || !user) {
@@ -414,6 +430,16 @@ export function Dashboard() {
                   <h2 className="text-3xl font-bold text-gray-900 mb-2">Aplicaciones</h2>
                   <p className="text-gray-600">Gestiona aplicaciones registradas</p>
                 </div>
+                <button
+                  onClick={() => {
+                    setSelectedApplication(null);
+                    setShowApplicationModal(true);
+                  }}
+                  className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="w-5 h-5" />
+                  Nueva Aplicación
+                </button>
               </div>
 
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -452,7 +478,13 @@ export function Dashboard() {
                         </span>
                       </div>
                     </div>
-                    <button className="mt-4 w-full bg-gray-50 hover:bg-gray-100 text-gray-700 py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => {
+                        setSelectedApplication(app);
+                        setShowApplicationModal(true);
+                      }}
+                      className="mt-4 w-full bg-gray-50 hover:bg-gray-100 text-gray-700 py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2"
+                    >
                       <Settings className="w-4 h-4" />
                       Configurar
                     </button>
@@ -745,6 +777,27 @@ export function Dashboard() {
             </form>
           </div>
         </div>
+      )}
+
+      {selectedTenant && (
+        <TenantDetailModal
+          tenant={selectedTenant}
+          onClose={() => setSelectedTenant(null)}
+          onRefresh={loadDashboardData}
+          adminApi={adminApi}
+          applications={applications}
+        />
+      )}
+
+      {showApplicationModal && (
+        <ApplicationModal
+          application={selectedApplication || undefined}
+          onClose={() => {
+            setShowApplicationModal(false);
+            setSelectedApplication(null);
+          }}
+          onSave={selectedApplication ? handleUpdateApplication : handleCreateApplication}
+        />
       )}
     </div>
   );
