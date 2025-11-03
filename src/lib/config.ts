@@ -1,4 +1,5 @@
 const ENV_API_URL = 'https://ffihaeatoundrjzgtpzk.supabase.co/functions/v1/get-env';
+const ACCESS_KEY = '033b6f38b0c5b902c90dbb1f371c389f967a0afa871028da2ab5657062cab866';
 
 interface EnvConfig {
   project_name: string;
@@ -11,37 +12,16 @@ class ConfigService {
   private static CONFIG_KEY = 'app_config';
   private static CACHE_DURATION = 1000 * 60 * 60;
   private static config: EnvConfig | null = null;
-  private static accessKey: string | null = null;
 
-  static setAccessKey(key: string) {
-    this.accessKey = key;
-    localStorage.setItem('config_access_key', key);
-  }
-
-  static getAccessKey(): string | null {
-    if (this.accessKey) return this.accessKey;
-
-    const stored = localStorage.getItem('config_access_key') || import.meta.env.VITE_CONFIG_ACCESS_KEY;
-    if (stored) {
-      this.accessKey = stored;
-      return stored;
-    }
-
-    return null;
+  static getAccessKey(): string {
+    return ACCESS_KEY;
   }
 
   static async fetchConfig(): Promise<EnvConfig> {
-    const accessKey = this.getAccessKey();
-
-    if (!accessKey) {
-      throw new Error('No access key configured');
-    }
-
     try {
-      const response = await fetch(`${ENV_API_URL}?format=json`, {
-        method: 'GET',
+      const response = await fetch(ENV_API_URL, {
         headers: {
-          'X-Access-Key': accessKey,
+          'X-Access-Key': ACCESS_KEY,
         },
       });
 
