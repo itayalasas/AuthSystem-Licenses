@@ -1,6 +1,7 @@
 const AUTH_URL = import.meta.env.VITE_AUTH_URL;
 const AUTH_APP_ID = import.meta.env.VITE_AUTH_APP_ID;
 const AUTH_API_KEY = import.meta.env.VITE_AUTH_API_KEY;
+const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI;
 
 interface AuthUser {
   sub: string;
@@ -28,7 +29,7 @@ class AuthService {
   private static USER_KEY = 'auth_user';
 
   static buildAuthUrl(type: 'login' | 'register'): string {
-    const redirectUri = `${window.location.origin}/callback`;
+    const redirectUri = REDIRECT_URI || `${window.location.origin}/callback`;
     const params = new URLSearchParams({
       app_id: AUTH_APP_ID,
       redirect_uri: redirectUri,
