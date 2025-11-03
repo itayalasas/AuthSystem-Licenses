@@ -3,8 +3,9 @@ import { Login } from './pages/Login';
 import { AuthCallback } from './pages/AuthCallback';
 import { Dashboard } from './pages/Dashboard';
 import { AuthService } from './lib/auth';
+import { ConfigLoader } from './components/ConfigLoader';
 
-function App() {
+function AppRoutes() {
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
 
   useEffect(() => {
@@ -35,6 +36,14 @@ function App() {
   }
 
   return null;
+}
+
+function App() {
+  return (
+    <ConfigLoader>
+      <AppRoutes />
+    </ConfigLoader>
+  );
 }
 
 export default App;

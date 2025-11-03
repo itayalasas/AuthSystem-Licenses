@@ -1,7 +1,4 @@
-const AUTH_URL = import.meta.env.VITE_AUTH_URL;
-const AUTH_APP_ID = import.meta.env.VITE_AUTH_APP_ID;
-const AUTH_API_KEY = import.meta.env.VITE_AUTH_API_KEY;
-const REDIRECT_URI = import.meta.env.VITE_REDIRECT_URI;
+import { ConfigService } from './config';
 
 interface AuthUser {
   sub: string;
@@ -28,15 +25,35 @@ class AuthService {
   private static STORAGE_KEY = 'auth_tokens';
   private static USER_KEY = 'auth_user';
 
+  private static getAuthUrl(): string {
+    return ConfigService.getVariable('VITE_AUTH_URL') || import.meta.env.VITE_AUTH_URL || '';
+  }
+
+  private static getAppId(): string {
+    return ConfigService.getVariable('VITE_AUTH_APP_ID') || import.meta.env.VITE_AUTH_APP_ID || '';
+  }
+
+  private static getApiKey(): string {
+    return ConfigService.getVariable('VITE_AUTH_API_KEY') || import.meta.env.VITE_AUTH_API_KEY || '';
+  }
+
+  private static getRedirectUri(): string {
+    return ConfigService.getVariable('VITE_REDIRECT_URI') || import.meta.env.VITE_REDIRECT_URI || '';
+  }
+
   static buildAuthUrl(type: 'login' | 'register'): string {
-    const redirectUri = REDIRECT_URI || `${window.location.origin}/callback`;
+    const authUrl = this.getAuthUrl();
+    const appId = this.getAppId();
+    const apiKey = this.getApiKey();
+    const redirectUri = this.getRedirectUri() || `${window.location.origin}/callback`;
+
     const params = new URLSearchParams({
-      app_id: AUTH_APP_ID,
+      app_id: appId,
       redirect_uri: redirectUri,
-      api_key: AUTH_API_KEY,
+      api_key: apiKey,
     });
 
-    return `${AUTH_URL}/${type}?${params.toString()}`;
+    return `${authUrl}/${type}?${params.toString()}`;
   }
 
   static redirectToLogin() {
@@ -143,16 +160,20 @@ class AuthService {
     const tokens = this.getTokens();
     if (!tokens?.refresh_token) return false;
 
+    const authUrl = this.getAuthUrl();
+    const appId = this.getAppId();
+    const apiKey = this.getApiKey();
+
     try {
-      const response = await fetch(`${AUTH_URL}/refresh`, {
+      const response = await fetch(`${authUrl}/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           refresh_token: tokens.refresh_token,
-          app_id: AUTH_APP_ID,
-          api_key: AUTH_API_KEY,
+          app_id: appId,
+          api_key: apiKey,
         }),
       });
 
