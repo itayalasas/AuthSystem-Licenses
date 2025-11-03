@@ -19,6 +19,7 @@ import {
   CreditCard,
   LogOut,
   User,
+  BookOpen,
 } from 'lucide-react';
 
 export function Dashboard() {
@@ -28,7 +29,7 @@ export function Dashboard() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeView, setActiveView] = useState<'dashboard' | 'tenants' | 'applications'>(
+  const [activeView, setActiveView] = useState<'dashboard' | 'tenants' | 'applications' | 'manual'>(
     'dashboard'
   );
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
@@ -160,6 +161,18 @@ export function Dashboard() {
             >
               <Package className="w-5 h-5" />
               <span className="font-medium">Aplicaciones</span>
+            </button>
+
+            <button
+              onClick={() => setActiveView('manual')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg mb-2 transition-colors ${
+                activeView === 'manual'
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <BookOpen className="w-5 h-5" />
+              <span className="font-medium">Manual de Uso</span>
             </button>
           </nav>
 
@@ -445,6 +458,186 @@ export function Dashboard() {
                     </button>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {activeView === 'manual' && (
+            <div className="p-8">
+              <div className="mb-8">
+                <h2 className="text-3xl font-bold text-gray-900 mb-2">
+                  📖 Manual de Uso
+                </h2>
+                <p className="text-gray-600">Guía completa sobre cómo usar el sistema de licencias</p>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
+                <div className="prose max-w-none">
+                  <div className="mb-8 p-6 bg-blue-50 border border-blue-200 rounded-lg">
+                    <h3 className="text-xl font-bold text-blue-900 mb-3">🎯 ¿Qué es este sistema?</h3>
+                    <p className="text-blue-800">
+                      Este es un <strong>sistema centralizado de gestión de licencias y suscripciones</strong> que te permite:
+                    </p>
+                    <ul className="list-disc list-inside text-blue-800 mt-3 space-y-1">
+                      <li>Administrar múltiples aplicaciones desde un solo lugar</li>
+                      <li>Crear clientes (tenants) que pueden usar tus aplicaciones</li>
+                      <li>Asignar planes y licencias a cada cliente</li>
+                      <li>Controlar el acceso de los clientes a las funcionalidades</li>
+                    </ul>
+                  </div>
+
+                  <div className="space-y-8">
+                    <section>
+                      <h3 className="text-2xl font-bold text-gray-900 mb-4">📋 Conceptos Clave</h3>
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div className="p-4 bg-gray-50 rounded-lg">
+                          <h4 className="font-bold text-lg text-gray-900 mb-2">🔷 Application (Aplicación)</h4>
+                          <p className="text-gray-700 text-sm">Una aplicación que desarrollaste y quieres licenciar.</p>
+                          <p className="text-gray-600 text-sm mt-2"><strong>Ejemplo:</strong> "Mi Sistema de Facturación", "Mi CRM"</p>
+                        </div>
+                        <div className="p-4 bg-gray-50 rounded-lg">
+                          <h4 className="font-bold text-lg text-gray-900 mb-2">🔷 Tenant (Cliente)</h4>
+                          <p className="text-gray-700 text-sm">Una empresa o persona que usa tus aplicaciones.</p>
+                          <p className="text-gray-600 text-sm mt-2"><strong>Ejemplo:</strong> "Empresa ABC S.A.", "Juan Pérez"</p>
+                        </div>
+                        <div className="p-4 bg-gray-50 rounded-lg">
+                          <h4 className="font-bold text-lg text-gray-900 mb-2">🔷 Plan</h4>
+                          <p className="text-gray-700 text-sm">Un nivel de servicio con funcionalidades específicas.</p>
+                          <p className="text-gray-600 text-sm mt-2"><strong>Ejemplo:</strong> Plan Básico $10/mes, Plan Pro $50/mes</p>
+                        </div>
+                        <div className="p-4 bg-gray-50 rounded-lg">
+                          <h4 className="font-bold text-lg text-gray-900 mb-2">🔷 Subscription (Licencia)</h4>
+                          <p className="text-gray-700 text-sm">La relación entre un Cliente, una Aplicación y un Plan.</p>
+                          <p className="text-gray-600 text-sm mt-2"><strong>Ejemplo:</strong> "Empresa ABC tiene Plan Pro hasta 31/12/2025"</p>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="border-t border-gray-200 pt-8">
+                      <h3 className="text-2xl font-bold text-gray-900 mb-4">🚀 Proceso Paso a Paso</h3>
+                      <div className="space-y-6">
+                        <div className="flex gap-4">
+                          <div className="flex-shrink-0 w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
+                            1
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-bold text-lg text-gray-900 mb-2">Registrar tu Aplicación</h4>
+                            <p className="text-gray-700 mb-2">Ve a la sección "Aplicaciones" y registra cada app que quieres licenciar.</p>
+                            <p className="text-sm text-gray-600"><strong>Datos necesarios:</strong> Nombre, Slug, External App ID</p>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-4">
+                          <div className="flex-shrink-0 w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
+                            2
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-bold text-lg text-gray-900 mb-2">Crear Planes de Suscripción</h4>
+                            <p className="text-gray-700 mb-2">Los planes definen qué funcionalidades y límites tiene cada nivel.</p>
+                            <p className="text-sm text-gray-600"><strong>Por ahora:</strong> Se crean directamente en la base de datos</p>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-4">
+                          <div className="flex-shrink-0 w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
+                            3
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-bold text-lg text-gray-900 mb-2">Crear un Cliente (Tenant)</h4>
+                            <p className="text-gray-700 mb-2">Click en "Crear Nuevo Cliente" y completa el formulario.</p>
+                            <p className="text-sm text-gray-600"><strong>Datos:</strong> Nombre, Email, Organización, Dominio</p>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-4">
+                          <div className="flex-shrink-0 w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
+                            4
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-bold text-lg text-gray-900 mb-2">Asignar una Licencia</h4>
+                            <p className="text-gray-700 mb-2">Selecciona el cliente, click en "Asignar Aplicación".</p>
+                            <p className="text-sm text-gray-600"><strong>Selecciona:</strong> Aplicación, Plan, Periodo de prueba</p>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-4">
+                          <div className="flex-shrink-0 w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
+                            5
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-bold text-lg text-gray-900 mb-2">Integrar tu Aplicación</h4>
+                            <p className="text-gray-700 mb-2">Tu aplicación debe verificar las licencias usando la API de validación.</p>
+                            <p className="text-sm text-gray-600"><strong>Endpoint:</strong> /functions/v1/validation-api/validate</p>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="border-t border-gray-200 pt-8">
+                      <h3 className="text-2xl font-bold text-gray-900 mb-4">🔄 Estados de Licencia</h3>
+                      <div className="grid md:grid-cols-3 gap-4">
+                        <div className="p-4 border-l-4 border-yellow-500 bg-yellow-50">
+                          <h4 className="font-bold text-yellow-900">trialing</h4>
+                          <p className="text-sm text-yellow-800">Periodo de prueba activo</p>
+                        </div>
+                        <div className="p-4 border-l-4 border-green-500 bg-green-50">
+                          <h4 className="font-bold text-green-900">active</h4>
+                          <p className="text-sm text-green-800">Suscripción pagada y activa</p>
+                        </div>
+                        <div className="p-4 border-l-4 border-orange-500 bg-orange-50">
+                          <h4 className="font-bold text-orange-900">past_due</h4>
+                          <p className="text-sm text-orange-800">Pago pendiente</p>
+                        </div>
+                        <div className="p-4 border-l-4 border-red-500 bg-red-50">
+                          <h4 className="font-bold text-red-900">canceled</h4>
+                          <p className="text-sm text-red-800">Cancelada por admin</p>
+                        </div>
+                        <div className="p-4 border-l-4 border-gray-500 bg-gray-50">
+                          <h4 className="font-bold text-gray-900">expired</h4>
+                          <p className="text-sm text-gray-800">Periodo terminado</p>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="border-t border-gray-200 pt-8">
+                      <h3 className="text-2xl font-bold text-gray-900 mb-4">🔐 Información de Seguridad</h3>
+                      <div className="space-y-4">
+                        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                          <h4 className="font-bold text-red-900 mb-2">⚠️ Token de Admin</h4>
+                          <p className="text-sm text-red-800">Token actual: <code className="bg-red-100 px-2 py-1 rounded">admin_001</code></p>
+                          <p className="text-sm text-red-800 mt-2">
+                            <strong>IMPORTANTE:</strong> Úsalo solo en el backend. Nunca lo expongas en el frontend. Permite acceso completo al sistema.
+                          </p>
+                        </div>
+                        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                          <h4 className="font-bold text-green-900 mb-2">✅ API Keys de Aplicaciones</h4>
+                          <p className="text-sm text-green-800">
+                            Cada aplicación tiene su propia API Key. Se genera automáticamente al crear la app.
+                            Se usa para validar licencias y puede exponerse en el frontend (es segura).
+                          </p>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="border-t border-gray-200 pt-8">
+                      <h3 className="text-2xl font-bold text-gray-900 mb-4">📚 Documentación Completa</h3>
+                      <p className="text-gray-700 mb-4">
+                        Para ver la documentación completa con ejemplos de código, APIs y casos de uso avanzados,
+                        consulta el archivo <code className="bg-gray-100 px-2 py-1 rounded text-sm">MANUAL_DE_USO.md</code> en la raíz del proyecto.
+                      </p>
+                      <div className="flex gap-4">
+                        <a
+                          href="https://yamuegahohdfyfxwobrk.supabase.co"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                          🔗 Abrir Supabase Dashboard
+                        </a>
+                      </div>
+                    </section>
+                  </div>
+                </div>
               </div>
             </div>
           )}
