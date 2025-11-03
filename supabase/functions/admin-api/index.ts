@@ -26,7 +26,7 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const url = new URL(req.url);
-    const path = url.pathname.replace('/admin-api', '');
+    const path = url.pathname.split('/admin-api')[1] || '/';
 
     // Simple admin authentication (in production, validate JWT from your auth system)
     const adminToken = req.headers.get('X-Admin-Token');
@@ -142,6 +142,8 @@ Deno.serve(async (req: Request) => {
     if (path === '/tenants' && req.method === 'POST') {
       const payload = await req.json();
 
+      console.log('Creating tenant with payload:', payload);
+
       const { data: tenant, error } = await supabase
         .from('tenants')
         .insert({
@@ -157,7 +159,20 @@ Deno.serve(async (req: Request) => {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error creating tenant:', error);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: error.message || 'Database error',
+            details: JSON.stringify(error),
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
 
       await logAudit('create_tenant', 'tenant', tenant.id, payload);
 

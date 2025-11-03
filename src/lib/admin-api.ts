@@ -174,7 +174,10 @@ class AdminAPIService {
 
     const result = await response.json();
     if (!result.success) {
-      throw new Error(result.error || 'Failed to create tenant');
+      const errorMsg = result.error || 'Failed to create tenant';
+      const details = result.details || '';
+      console.error('Create tenant error details:', { error: errorMsg, details, result });
+      throw new Error(`${errorMsg}${details ? `\n${details}` : ''}`);
     }
 
     return result.data;
