@@ -1,0 +1,278 @@
+const ADMIN_API_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-api`;
+
+interface Application {
+  id: string;
+  name: string;
+  slug: string;
+  external_app_id: string;
+  api_key: string;
+  webhook_url?: string;
+  settings: Record<string, any>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Tenant {
+  id: string;
+  name: string;
+  organization_name: string;
+  owner_user_id: string;
+  owner_email: string;
+  billing_email?: string;
+  domain?: string;
+  tax_id?: string;
+  status: 'active' | 'suspended' | 'canceled';
+  metadata: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+  tenant_applications?: TenantApplication[];
+}
+
+interface TenantApplication {
+  id: string;
+  tenant_id: string;
+  application_id: string;
+  subscription_id?: string;
+  status: 'active' | 'suspended' | 'canceled';
+  granted_at: string;
+  granted_by: string;
+  notes?: string;
+  application?: Application;
+  subscription?: any;
+}
+
+interface Plan {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  currency: string;
+  billing_cycle: 'monthly' | 'annual';
+  entitlements: any;
+}
+
+interface AuditLog {
+  id: string;
+  admin_user_id: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  changes: any;
+  ip_address: string;
+  user_agent: string;
+  created_at: string;
+  admin_user?: {
+    name: string;
+    email: string;
+  };
+}
+
+interface DashboardStats {
+  tenants_count: number;
+  active_subscriptions: number;
+  applications_count: number;
+  recent_tenants: Tenant[];
+}
+
+class AdminAPIService {
+  private adminToken: string;
+
+  constructor(adminToken: string) {
+    this.adminToken = adminToken;
+  }
+
+  private get headers(): HeadersInit {
+    return {
+      'Content-Type': 'application/json',
+      'X-Admin-Token': this.adminToken,
+      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+    };
+  }
+
+  async getApplications(): Promise<Application[]> {
+    const response = await fetch(`${ADMIN_API_URL}/applications`, {
+      headers: this.headers,
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to fetch applications');
+    }
+
+    return result.data;
+  }
+
+  async createApplication(data: {
+    name: string;
+    slug: string;
+    external_app_id: string;
+    webhook_url?: string;
+    settings?: Record<string, any>;
+  }): Promise<Application> {
+    const response = await fetch(`${ADMIN_API_URL}/applications`, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify(data),
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to create application');
+    }
+
+    return result.data;
+  }
+
+  async getTenants(): Promise<Tenant[]> {
+    const response = await fetch(`${ADMIN_API_URL}/tenants`, {
+      headers: this.headers,
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to fetch tenants');
+    }
+
+    return result.data;
+  }
+
+  async getTenant(tenantId: string): Promise<Tenant> {
+    const response = await fetch(`${ADMIN_API_URL}/tenants/${tenantId}`, {
+      headers: this.headers,
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to fetch tenant');
+    }
+
+    return result.data;
+  }
+
+  async createTenant(data: {
+    name: string;
+    organization_name?: string;
+    owner_user_id: string;
+    owner_email: string;
+    billing_email?: string;
+    domain?: string;
+    tax_id?: string;
+    metadata?: Record<string, any>;
+  }): Promise<Tenant> {
+    const response = await fetch(`${ADMIN_API_URL}/tenants`, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify(data),
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to create tenant');
+    }
+
+    return result.data;
+  }
+
+  async grantAccess(
+    tenantId: string,
+    data: {
+      application_id: string;
+      plan_id?: string;
+      start_trial?: boolean;
+      notes?: string;
+    }
+  ): Promise<TenantApplication> {
+    const response = await fetch(`${ADMIN_API_URL}/tenants/${tenantId}/grant-access`, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify(data),
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to grant access');
+    }
+
+    return result.data;
+  }
+
+  async revokeAccess(tenantId: string, applicationId: string): Promise<TenantApplication> {
+    const response = await fetch(
+      `${ADMIN_API_URL}/tenants/${tenantId}/revoke-access/${applicationId}`,
+      {
+        method: 'PUT',
+        headers: this.headers,
+      }
+    );
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to revoke access');
+    }
+
+    return result.data;
+  }
+
+  async changePlan(subscriptionId: string, planId: string): Promise<any> {
+    const response = await fetch(`${ADMIN_API_URL}/subscriptions/${subscriptionId}/change-plan`, {
+      method: 'PUT',
+      headers: this.headers,
+      body: JSON.stringify({ plan_id: planId }),
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to change plan');
+    }
+
+    return result.data;
+  }
+
+  async changeSubscriptionStatus(
+    subscriptionId: string,
+    status: 'trialing' | 'active' | 'past_due' | 'canceled' | 'paused'
+  ): Promise<any> {
+    const response = await fetch(`${ADMIN_API_URL}/subscriptions/${subscriptionId}/status`, {
+      method: 'PUT',
+      headers: this.headers,
+      body: JSON.stringify({ status }),
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to change status');
+    }
+
+    return result.data;
+  }
+
+  async getAuditLog(limit = 50, offset = 0): Promise<AuditLog[]> {
+    const response = await fetch(`${ADMIN_API_URL}/audit-log?limit=${limit}&offset=${offset}`, {
+      headers: this.headers,
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to fetch audit log');
+    }
+
+    return result.data;
+  }
+
+  async getStats(): Promise<DashboardStats> {
+    const response = await fetch(`${ADMIN_API_URL}/stats`, {
+      headers: this.headers,
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to fetch stats');
+    }
+
+    return result.data;
+  }
+}
+
+export { AdminAPIService };
+export type { Application, Tenant, TenantApplication, Plan, AuditLog, DashboardStats };
