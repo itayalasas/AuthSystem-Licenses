@@ -1,16 +1,17 @@
 import { Application } from '../lib/admin-api';
 import { CompactCard } from './CompactCard';
 import { Button } from './Button';
-import { Plus, Users, Globe, Edit2, Trash2, Key } from 'lucide-react';
+import { Plus, Users, Globe, Edit2, Trash2, Key, Eye } from 'lucide-react';
 
 interface ApplicationsViewProps {
   applications: Application[];
   onAdd: () => void;
   onEdit: (app: Application) => void;
   onDelete: (appId: string) => void;
+  onViewUsers: (app: Application) => void;
 }
 
-export function ApplicationsView({ applications, onAdd, onEdit, onDelete }: ApplicationsViewProps) {
+export function ApplicationsView({ applications, onAdd, onEdit, onDelete, onViewUsers }: ApplicationsViewProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -46,10 +47,16 @@ export function ApplicationsView({ applications, onAdd, onEdit, onDelete }: Appl
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center gap-2 text-xs text-gray-600">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onViewUsers(app);
+                  }}
+                  className="flex items-center gap-2 text-xs text-blue-600 hover:text-blue-700 hover:underline"
+                >
                   <Users size={14} className="flex-shrink-0" />
                   <span>{app.users_count || 0} usuarios</span>
-                </div>
+                </button>
                 {app.webhook_url && (
                   <div className="flex items-center gap-2 text-xs text-gray-600">
                     <Globe size={14} className="flex-shrink-0" />
@@ -64,28 +71,43 @@ export function ApplicationsView({ applications, onAdd, onEdit, onDelete }: Appl
                 </div>
               </div>
 
-              <div className="flex gap-2 pt-2 border-t border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => onEdit(app)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onViewUsers(app);
+                  }}
+                  icon={<Eye size={14} />}
+                  className="text-blue-600 hover:bg-blue-50"
+                >
+                  Ver
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(app);
+                  }}
                   icon={<Edit2 size={14} />}
-                  className="flex-1"
                 >
                   Editar
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     if (confirm('¿Eliminar esta aplicación?')) {
                       onDelete(app.id);
                     }
                   }}
                   icon={<Trash2 size={14} />}
-                  className="text-red-600 hover:bg-red-50 flex-1"
+                  className="text-red-600 hover:bg-red-50"
                 >
-                  Eliminar
+                  Borrar
                 </Button>
               </div>
             </div>

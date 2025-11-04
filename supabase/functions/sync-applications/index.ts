@@ -121,6 +121,8 @@ Deno.serve(async (req: Request) => {
       newly_created: 0,
       failed: 0,
       total_users_synced: 0,
+      total_tenants_created: 0,
+      total_relationships_created: 0,
       created_apps: [] as any[],
       errors: [] as string[],
     };
@@ -233,6 +235,80 @@ Deno.serve(async (req: Request) => {
       }
 
       console.log(`Synced ${extApp.users.length} users for ${extApp.name}`);
+
+      // Auto-create tenants for each user and link them to the application
+      for (const user of extApp.users) {
+        // Check if tenant already exists by owner_user_id
+        const { data: existingTenant } = await supabase
+          .from("tenants")
+          .select("id, external_app_id")
+          .eq("owner_user_id", user.id)
+          .maybeSingle();
+
+        let tenantId = existingTenant?.id;
+
+        // Create tenant if doesn't exist
+        if (!existingTenant) {
+          const { data: newTenant, error: tenantError } = await supabase
+            .from("tenants")
+            .insert({
+              name: user.name,
+              owner_user_id: user.id,
+              owner_email: user.email,
+              external_app_id: extApp.application_id,
+              metadata: {
+                auto_created: true,
+                source_application: extApp.name,
+                created_from_sync: true,
+              },
+            })
+            .select()
+            .single();
+
+          if (tenantError) {
+            console.error(`Failed to create tenant for user ${user.email}:`, tenantError);
+            results.errors.push(
+              `Failed to create tenant for ${user.email}: ${tenantError.message}`
+            );
+            continue;
+          }
+
+          tenantId = newTenant.id;
+          results.total_tenants_created++;
+          console.log(`Created tenant for user: ${user.name} (${user.email})`);
+        }
+
+        // Check if tenant_application relationship exists
+        const { data: existingRelation } = await supabase
+          .from("tenant_applications")
+          .select("id")
+          .eq("tenant_id", tenantId)
+          .eq("application_id", appId)
+          .maybeSingle();
+
+        // Create relationship if doesn't exist
+        if (!existingRelation) {
+          const { error: relationError } = await supabase
+            .from("tenant_applications")
+            .insert({
+              tenant_id: tenantId,
+              application_id: appId,
+              status: "active",
+              granted_by: "auto_sync",
+              notes: `Auto-created from application sync for user ${user.email}`,
+            });
+
+          if (relationError) {
+            console.error(`Failed to link tenant to app for ${user.email}:`, relationError);
+            results.errors.push(
+              `Failed to link tenant to app for ${user.email}: ${relationError.message}`
+            );
+          } else {
+            results.total_relationships_created++;
+            console.log(`Linked tenant ${user.name} to application ${extApp.name}`);
+          }
+        }
+      }
     }
 
     const summaryMessage = `
@@ -242,6 +318,8 @@ Deno.serve(async (req: Request) => {
       - Newly created: ${results.newly_created}
       - Failed: ${results.failed}
       - Total users synced: ${results.total_users_synced}
+      - Tenants auto-created: ${results.total_tenants_created}
+      - Application relationships created: ${results.total_relationships_created}
     `;
 
     console.log(summaryMessage);
@@ -256,6 +334,8 @@ Deno.serve(async (req: Request) => {
           newly_created: results.newly_created,
           failed: results.failed,
           total_users_synced: results.total_users_synced,
+          total_tenants_created: results.total_tenants_created,
+          total_relationships_created: results.total_relationships_created,
         },
         created_applications: results.created_apps,
         errors: results.errors,

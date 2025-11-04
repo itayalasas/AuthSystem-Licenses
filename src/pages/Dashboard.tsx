@@ -28,6 +28,7 @@ import { ApplicationsView } from '../components/ApplicationsView';
 import { TenantDetailModal } from '../components/TenantDetailModal';
 import { ApplicationModal } from '../components/ApplicationModal';
 import { PlanModal } from '../components/PlanModal';
+import { ApplicationUsersModal } from '../components/ApplicationUsersModal';
 
 export function Dashboard() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -48,6 +49,8 @@ export function Dashboard() {
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [showUsersModal, setShowUsersModal] = useState(false);
+  const [selectedAppForUsers, setSelectedAppForUsers] = useState<Application | null>(null);
   const { toasts, removeToast, success, error: showError, info } = useToast();
 
   useEffect(() => {
@@ -174,9 +177,11 @@ export function Dashboard() {
       const result = await response.json();
 
       if (result.success) {
+        const summary = result.summary;
         success(
-          `Sincronización completada: ${result.summary.newly_created} nuevas, ` +
-          `${result.summary.total_users_synced} usuarios actualizados`
+          `Sincronización completada: ${summary.newly_created} apps nuevas, ` +
+          `${summary.total_users_synced} usuarios, ${summary.total_tenants_created} clientes creados, ` +
+          `${summary.total_relationships_created} relaciones establecidas`
         );
         await loadDashboardData();
       } else {
@@ -402,6 +407,10 @@ export function Dashboard() {
                     setShowApplicationModal(true);
                   }}
                   onDelete={handleDeleteApplication}
+                  onViewUsers={(app) => {
+                    setSelectedAppForUsers(app);
+                    setShowUsersModal(true);
+                  }}
                 />
               </div>
             )}
@@ -598,6 +607,18 @@ export function Dashboard() {
             setSelectedPlan(null);
           }}
           onCreate={handleCreatePlan}
+        />
+      )}
+
+      {showUsersModal && selectedAppForUsers && (
+        <ApplicationUsersModal
+          applicationId={selectedAppForUsers.id}
+          applicationName={selectedAppForUsers.name}
+          adminApi={adminApi}
+          onClose={() => {
+            setShowUsersModal(false);
+            setSelectedAppForUsers(null);
+          }}
         />
       )}
     </div>
