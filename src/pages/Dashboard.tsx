@@ -918,7 +918,7 @@ export function Dashboard() {
                       </p>
                       <div className="flex gap-4">
                         <a
-                          href="https://yamuegahohdfyfxwobrk.supabase.co"
+                          href="https://veymthufmfqhxxxzfmfi.supabase.co"
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"

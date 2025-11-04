@@ -9,7 +9,7 @@ Esta API sincroniza automáticamente las aplicaciones desde el sistema de autent
 ## 🔗 Endpoint de la API
 
 ```
-https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications
+https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/sync-applications
 ```
 
 **Método:** `GET` o `POST`
@@ -24,7 +24,7 @@ Esta es la forma **más segura** porque el token va en el header, no en la URL.
 
 ### Opción 2: Secret en Query Parameter (Alternativa)
 ```
-https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications?secret=TU_SECRET_AQUI
+https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/sync-applications?secret=TU_SECRET_AQUI
 ```
 ⚠️ Menos seguro porque el secret queda visible en logs y URLs.
 
@@ -84,7 +84,7 @@ https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications?secret=T
 - **Title:** `Sync Applications from Auth System`
 - **Address (URL):**
   ```
-  https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications
+  https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/sync-applications
   ```
 
 - **Request method:** `GET`
@@ -108,7 +108,7 @@ Agrega un header personalizado para autenticación:
 
 Si Cron-Job.org no permite configurar headers, puedes usar:
 ```
-https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications?secret=MI_SECRET_SEGURO_123
+https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/sync-applications?secret=MI_SECRET_SEGURO_123
 ```
 
 Genera un secret seguro:
@@ -163,13 +163,13 @@ Patrón cron: `*/30 * * * *`
 ### Opción 1: Usando cURL con Secret
 
 ```bash
-curl -X GET "https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications?secret=MI_SECRET_SEGURO_123"
+curl -X GET "https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/sync-applications?secret=MI_SECRET_SEGURO_123"
 ```
 
 ### Opción 2: Usando cURL con Bearer Token (⭐ Recomendado)
 
 ```bash
-curl -X GET https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications \
+curl -X GET https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/sync-applications \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 ```
 
@@ -179,14 +179,14 @@ Reemplaza el token con tu **Supabase Anon Key** (Settings → API en Supabase Da
 
 Simplemente abre esta URL en tu navegador (con el secret):
 ```
-https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications?secret=MI_SECRET_SEGURO_123
+https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/sync-applications?secret=MI_SECRET_SEGURO_123
 ```
 
 ### Usando Postman
 
 #### Con Secret en Query Param:
 1. Método: `GET`
-2. URL: `https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications`
+2. URL: `https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/sync-applications`
 3. En "Params" agrega:
    - Key: `secret`
    - Value: `MI_SECRET_SEGURO_123`
@@ -194,7 +194,7 @@ https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications?secret=M
 
 #### Con Bearer Token:
 1. Método: `GET`
-2. URL: `https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications`
+2. URL: `https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/sync-applications`
 3. En "Headers" agrega:
    - Key: `Authorization`
    - Value: `Bearer TU_SUPABASE_ANON_KEY`
@@ -254,7 +254,7 @@ ORDER BY created_at DESC;
 
 ### Ver Logs en Supabase
 
-1. Ve a [Supabase Dashboard](https://yamuegahohdfyfxwobrk.supabase.co)
+1. Ve a [Supabase Dashboard](https://veymthufmfqhxxxzfmfi.supabase.co)
 2. Click en **"Edge Functions"**
 3. Selecciona **"sync-applications"**
 4. Ve a la pestaña **"Logs"**

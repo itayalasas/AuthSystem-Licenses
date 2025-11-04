@@ -113,7 +113,7 @@ Tu aplicación valida las licencias usando el API:
 ```javascript
 // Ejemplo de validación
 const response = await fetch(
-  'https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/validation-api/validate-user',
+  'https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/validation-api/validate-user',
   {
     method: 'POST',
     headers: {
@@ -277,7 +277,7 @@ Hemos creado 3 documentos completos:
 ### 1. Configurar Webhooks de Pago
 Si usas Stripe u otro procesador:
 - Configura el webhook en tu proveedor de pagos
-- Apunta a: `https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/webhook-handler`
+- Apunta a: `https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/webhook-handler`
 - El sistema actualizará automáticamente el estado de las suscripciones
 
 ### 2. Implementar Cron Job para Renovaciones

@@ -39,7 +39,7 @@ Crea un archivo `.env` en tu aplicación:
 
 \`\`\`env
 # URL de Supabase
-VITE_SUPABASE_URL=https://yamuegahohdfyfxwobrk.supabase.co
+VITE_SUPABASE_URL=https://veymthufmfqhxxxzfmfi.supabase.co
 
 # API Key de tu aplicación (NO ES LA ANON KEY DE SUPABASE)
 VITE_APP_API_KEY=ak_xxxxxxxxxxxxxx
@@ -61,7 +61,7 @@ npm install @supabase/supabase-js
 ### API Endpoint
 
 \`\`\`
-POST https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/validation-api/validate-user
+POST https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/validation-api/validate-user
 \`\`\`
 
 ### Headers Requeridos

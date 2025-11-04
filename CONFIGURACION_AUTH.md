@@ -6,7 +6,7 @@ Configura estas variables en tu archivo `.env`:
 
 ```bash
 # Supabase (Base de datos)
-VITE_SUPABASE_URL=https://yamuegahohdfyfxwobrk.supabase.co
+VITE_SUPABASE_URL=https://veymthufmfqhxxxzfmfi.supabase.co
 VITE_SUPABASE_ANON_KEY=tu_supabase_anon_key
 
 # Sistema de Autenticación Externo
@@ -149,7 +149,7 @@ Cuando decodificas el JWT token, obtienes:
 3. Agrega las siguientes variables:
 
 ```
-VITE_SUPABASE_URL = https://yamuegahohdfyfxwobrk.supabase.co
+VITE_SUPABASE_URL = https://veymthufmfqhxxxzfmfi.supabase.co
 VITE_SUPABASE_ANON_KEY = tu_key_aqui
 VITE_AUTH_URL = https://auth-licenses.netlify.app
 VITE_AUTH_APP_ID = app_bcc65e74-308

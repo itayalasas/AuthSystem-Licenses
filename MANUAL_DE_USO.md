@@ -94,7 +94,7 @@ Primero debes registrar cada aplicación que quieres licenciar.
 
 **Opción B: Por API**
 ```bash
-curl -X POST "https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/admin-api/applications" \
+curl -X POST "https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/admin-api/applications" \
   -H "Content-Type: application/json" \
   -H "X-Admin-Token: admin_001" \
   -d '{
@@ -190,7 +190,7 @@ Un cliente es quien va a usar tu aplicación.
 
 #### Por API:
 ```bash
-curl -X POST "https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/admin-api/tenants" \
+curl -X POST "https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/admin-api/tenants" \
   -H "Content-Type: application/json" \
   -H "X-Admin-Token: admin_001" \
   -d '{
@@ -221,7 +221,7 @@ Este es el paso donde le das acceso a tu aplicación con un plan específico.
 
 #### Por API:
 ```bash
-curl -X POST "https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/admin-api/tenants/{tenant_id}/grant-access" \
+curl -X POST "https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/admin-api/tenants/{tenant_id}/grant-access" \
   -H "Content-Type: application/json" \
   -H "X-Admin-Token: admin_001" \
   -d '{
@@ -254,14 +254,14 @@ npm install @supabase/supabase-js
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
-  'https://yamuegahohdfyfxwobrk.supabase.co',
+  'https://veymthufmfqhxxxzfmfi.supabase.co',
   'tu-api-key-de-la-aplicacion'
 )
 
 // 3. Verifica la licencia del usuario
 async function verificarLicencia(userId: string, appId: string) {
   const response = await fetch(
-    `https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/validation-api/validate`,
+    `https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/validation-api/validate`,
     {
       method: 'POST',
       headers: {
@@ -395,7 +395,7 @@ NUEVO CLIENTE
 ### **Caso 2: Upgrade de plan**
 
 ```bash
-curl -X PUT "https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/admin-api/subscriptions/{subscription_id}/change-plan" \
+curl -X PUT "https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/admin-api/subscriptions/{subscription_id}/change-plan" \
   -H "Content-Type: application/json" \
   -H "X-Admin-Token: admin_001" \
   -d '{
@@ -406,7 +406,7 @@ curl -X PUT "https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/admin-api/sub
 ### **Caso 3: Suspender cliente por falta de pago**
 
 ```bash
-curl -X PUT "https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/admin-api/subscriptions/{subscription_id}/status" \
+curl -X PUT "https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/admin-api/subscriptions/{subscription_id}/status" \
   -H "Content-Type: application/json" \
   -H "X-Admin-Token: admin_001" \
   -d '{
@@ -417,7 +417,7 @@ curl -X PUT "https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/admin-api/sub
 ### **Caso 4: Cancelar acceso completamente**
 
 ```bash
-curl -X PUT "https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/admin-api/tenants/{tenant_id}/revoke-access/{app_id}" \
+curl -X PUT "https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/admin-api/tenants/{tenant_id}/revoke-access/{app_id}" \
   -H "X-Admin-Token: admin_001"
 ```
 
@@ -427,19 +427,19 @@ curl -X PUT "https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/admin-api/ten
 
 ### Ver todos los clientes:
 ```bash
-curl "https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/admin-api/tenants" \
+curl "https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/admin-api/tenants" \
   -H "X-Admin-Token: admin_001"
 ```
 
 ### Ver un cliente específico:
 ```bash
-curl "https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/admin-api/tenants/{tenant_id}" \
+curl "https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/admin-api/tenants/{tenant_id}" \
   -H "X-Admin-Token: admin_001"
 ```
 
 ### Ver estadísticas:
 ```bash
-curl "https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/admin-api/stats" \
+curl "https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/admin-api/stats" \
   -H "X-Admin-Token: admin_001"
 ```
 
@@ -572,7 +572,7 @@ R: Cuando proceses el pago exitoso, actualiza:
 
 ## 📚 Recursos Adicionales
 
-- **Base de datos Supabase**: https://yamuegahohdfyfxwobrk.supabase.co
+- **Base de datos Supabase**: https://veymthufmfqhxxxzfmfi.supabase.co
 - **API Admin**: `/functions/v1/admin-api`
 - **API Validación**: `/functions/v1/validation-api`
 - **Token Admin**: `admin_001`
@@ -585,7 +585,7 @@ R: Cuando proceses el pago exitoso, actualiza:
 // === EN TU APLICACIÓN ===
 
 // 1. Configuración inicial
-const SUPABASE_URL = 'https://yamuegahohdfyfxwobrk.supabase.co'
+const SUPABASE_URL = 'https://veymthufmfqhxxxzfmfi.supabase.co'
 const APP_API_KEY = 'tu-api-key'  // La que obtuviste al crear la app
 
 // 2. Función para verificar acceso

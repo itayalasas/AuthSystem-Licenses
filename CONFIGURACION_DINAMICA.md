@@ -50,7 +50,7 @@ curl -X GET "https://ffihaeatoundrjzgtpzk.supabase.co/functions/v1/get-env?forma
     "VITE_AUTH_APP_ID": "app_bcc65e74-308",
     "VITE_AUTH_URL": "https://auth-licenses.netlify.app",
     "VITE_REDIRECT_URI": "https://tu-app.netlify.app/callback",
-    "VITE_SUPABASE_URL": "https://yamuegahohdfyfxwobrk.supabase.co",
+    "VITE_SUPABASE_URL": "https://veymthufmfqhxxxzfmfi.supabase.co",
     "VITE_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   },
   "updated_at": "2025-10-25T12:00:00Z"

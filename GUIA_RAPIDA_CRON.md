@@ -2,7 +2,7 @@
 
 ## Paso 1: Obtener tu Supabase Anon Key
 
-1. Ve a: https://yamuegahohdfyfxwobrk.supabase.co
+1. Ve a: https://veymthufmfqhxxxzfmfi.supabase.co
 2. Click en **Settings** → **API**
 3. Copia el **"anon" public key** (comienza con `eyJhbG...`)
 
@@ -23,7 +23,7 @@
 
    **URL:**
    ```
-   https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications
+   https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/sync-applications
    ```
 
    **Method:**
