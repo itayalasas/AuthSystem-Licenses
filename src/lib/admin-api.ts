@@ -5,6 +5,16 @@ const getAdminApiUrl = () => {
   return `${supabaseUrl}/functions/v1/admin-api`;
 };
 
+interface ApplicationUser {
+  id: string;
+  external_user_id: string;
+  email: string;
+  name: string;
+  status: string;
+  last_login?: string;
+  created_at: string;
+}
+
 interface Application {
   id: string;
   name: string;
@@ -16,6 +26,7 @@ interface Application {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  users_count?: number;
 }
 
 interface Tenant {
@@ -379,7 +390,20 @@ class AdminAPIService {
 
     return result.data;
   }
+
+  async getApplicationUsers(applicationId: string): Promise<ApplicationUser[]> {
+    const response = await fetch(`${getAdminApiUrl()}/applications/${applicationId}/users`, {
+      headers: this.headers,
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to fetch application users');
+    }
+
+    return result.data;
+  }
 }
 
 export { AdminAPIService };
-export type { Application, Tenant, TenantApplication, Plan, AuditLog, DashboardStats };
+export type { Application, ApplicationUser, Tenant, TenantApplication, Plan, AuditLog, DashboardStats };

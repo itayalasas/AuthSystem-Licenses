@@ -7,17 +7,28 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface ExternalUser {
+  id: string;
+  email: string;
+  name: string;
+  status: string;
+  last_login: string | null;
+  created_at: string;
+}
+
 interface ExternalApplication {
   id: string;
   name: string;
   application_id: string;
   status: string;
   url: string;
+  users_count: number;
   environment_urls: {
     development: string | null;
     testing: string | null;
     production: string | null;
   };
+  users: ExternalUser[];
   created_at: string;
   updated_at: string;
 }
@@ -109,6 +120,7 @@ Deno.serve(async (req: Request) => {
       already_exists: 0,
       newly_created: 0,
       failed: 0,
+      total_users_synced: 0,
       created_apps: [] as any[],
       errors: [] as string[],
     };
@@ -165,12 +177,71 @@ Deno.serve(async (req: Request) => {
       console.log(`Created application: ${createdApp.name} (${createdApp.external_app_id})`);
     }
 
+    // Sync users for all applications
+    console.log("Starting user synchronization...");
+
+    for (const extApp of externalApps) {
+      if (!extApp.users || extApp.users.length === 0) {
+        console.log(`No users to sync for ${extApp.name}`);
+        continue;
+      }
+
+      // Find the internal application ID
+      const internalApp = existingApps?.find(
+        app => app.external_app_id === extApp.application_id
+      ) || results.created_apps.find(
+        app => app.external_app_id === extApp.application_id
+      );
+
+      if (!internalApp) {
+        console.error(`Could not find internal app for ${extApp.application_id}`);
+        continue;
+      }
+
+      const appId = internalApp.id;
+
+      // Sync each user
+      for (const user of extApp.users) {
+        const userData = {
+          application_id: appId,
+          external_user_id: user.id,
+          email: user.email,
+          name: user.name,
+          status: user.status,
+          last_login: user.last_login,
+          metadata: {
+            synced_at: new Date().toISOString(),
+          },
+        };
+
+        // Upsert user (insert or update if exists)
+        const { error: upsertError } = await supabase
+          .from("application_users")
+          .upsert(userData, {
+            onConflict: "application_id,external_user_id",
+            ignoreDuplicates: false,
+          });
+
+        if (upsertError) {
+          console.error(`Failed to sync user ${user.email} for ${extApp.name}:`, upsertError);
+          results.errors.push(
+            `Failed to sync user ${user.email}: ${upsertError.message}`
+          );
+        } else {
+          results.total_users_synced++;
+        }
+      }
+
+      console.log(`Synced ${extApp.users.length} users for ${extApp.name}`);
+    }
+
     const summaryMessage = `
       Sync completed successfully!
-      - Total from external system: ${results.total_external}
+      - Total applications from external system: ${results.total_external}
       - Already registered: ${results.already_exists}
       - Newly created: ${results.newly_created}
       - Failed: ${results.failed}
+      - Total users synced: ${results.total_users_synced}
     `;
 
     console.log(summaryMessage);
@@ -184,6 +255,7 @@ Deno.serve(async (req: Request) => {
           already_exists: results.already_exists,
           newly_created: results.newly_created,
           failed: results.failed,
+          total_users_synced: results.total_users_synced,
         },
         created_applications: results.created_apps,
         errors: results.errors,

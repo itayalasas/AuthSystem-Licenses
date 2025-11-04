@@ -75,8 +75,23 @@ Deno.serve(async (req: Request) => {
 
       if (error) throw error;
 
+      // Get user count for each application
+      const appsWithUserCount = await Promise.all(
+        (data || []).map(async (app) => {
+          const { count } = await supabase
+            .from("application_users")
+            .select("*", { count: "exact", head: true })
+            .eq("application_id", app.id);
+
+          return {
+            ...app,
+            users_count: count || 0,
+          };
+        })
+      );
+
       return new Response(
-        JSON.stringify({ success: true, data }),
+        JSON.stringify({ success: true, data: appsWithUserCount }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
@@ -465,9 +480,29 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // GET /applications/:id/users - Get users of an application
+    if (path.match(/^applications\/[0-9a-f-]+\/users$/) && req.method === "GET") {
+      const applicationId = path.split("/")[1];
+
+      const { data, error } = await supabase
+        .from("application_users")
+        .select("*")
+        .eq("application_id", applicationId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      return new Response(
+        JSON.stringify({ success: true, data: data || [] }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     // DELETE /applications/:id - Delete application
-    if (path.match(/^\/applications\/[0-9a-f-]+$/) && req.method === "DELETE") {
-      const applicationId = path.split("/")[2];
+    if (path.match(/^applications\/[0-9a-f-]+$/) && req.method === "DELETE") {
+      const applicationId = path.split("/")[1];
 
       const { error: deleteError } = await supabase
         .from("applications")
@@ -475,8 +510,6 @@ Deno.serve(async (req: Request) => {
         .eq("id", applicationId);
 
       if (deleteError) throw deleteError;
-
-      await logAudit("delete", "application", applicationId, {});
 
       return new Response(
         JSON.stringify({ success: true, message: "Application deleted successfully" }),
