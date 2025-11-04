@@ -16,15 +16,17 @@ https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications
 
 **Autenticación:** Requiere una de las siguientes opciones:
 
-### Opción 1: Secret en Query Parameter (Recomendado para CRON)
+### Opción 1: Bearer Token en Header (⭐ Recomendado)
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlhb...
+```
+Esta es la forma **más segura** porque el token va en el header, no en la URL.
+
+### Opción 2: Secret en Query Parameter (Alternativa)
 ```
 https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications?secret=TU_SECRET_AQUI
 ```
-
-### Opción 2: Bearer Token en Header (Para uso desde el Dashboard)
-```
-Authorization: Bearer TU_SUPABASE_ANON_KEY
-```
+⚠️ Menos seguro porque el secret queda visible en logs y URLs.
 
 ---
 
@@ -82,17 +84,37 @@ Authorization: Bearer TU_SUPABASE_ANON_KEY
 - **Title:** `Sync Applications from Auth System`
 - **Address (URL):**
   ```
-  https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications?secret=MI_SECRET_SEGURO_123
-  ```
-
-  ⚠️ **IMPORTANTE:** Reemplaza `MI_SECRET_SEGURO_123` con un secret seguro único.
-
-  Puedes generar un secret seguro con este comando:
-  ```bash
-  openssl rand -hex 32
+  https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications
   ```
 
 - **Request method:** `GET`
+
+#### **Configuración de Headers** (⭐ Recomendado)
+
+Agrega un header personalizado para autenticación:
+
+1. En Cron-Job.org, busca la sección **"Headers"** o **"Request Headers"**
+2. Agrega un nuevo header:
+   - **Key:** `Authorization`
+   - **Value:** `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
+
+**Obtener tu Supabase Anon Key:**
+1. Ve a tu proyecto en Supabase Dashboard
+2. Settings → API
+3. Copia el **"anon" / "public"** key
+4. Úsalo como: `Bearer TU_ANON_KEY_AQUI`
+
+#### **Alternativa: Usando Query Parameter** (Menos seguro)
+
+Si Cron-Job.org no permite configurar headers, puedes usar:
+```
+https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications?secret=MI_SECRET_SEGURO_123
+```
+
+Genera un secret seguro:
+```bash
+openssl rand -hex 32
+```
 
 #### **Configuración de Ejecución**
 
@@ -144,12 +166,14 @@ Patrón cron: `*/30 * * * *`
 curl -X GET "https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications?secret=MI_SECRET_SEGURO_123"
 ```
 
-### Opción 2: Usando cURL con Bearer Token
+### Opción 2: Usando cURL con Bearer Token (⭐ Recomendado)
 
 ```bash
 curl -X GET https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications \
-  -H "Authorization: Bearer TU_SUPABASE_ANON_KEY"
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 ```
+
+Reemplaza el token con tu **Supabase Anon Key** (Settings → API en Supabase Dashboard)
 
 ### Usando el Navegador
 
@@ -257,15 +281,25 @@ ORDER BY created_at DESC;
 - Si tienes miles de apps, considera paginar la sincronización
 
 ### Seguridad
-- La API **requiere autenticación** mediante secret o Bearer token
-- El secret del CRON debe ser **único y seguro**
-- Guarda el secret de forma segura, NO lo expongas públicamente
-- La función solo puede **crear** aplicaciones, no modificar o eliminar
-- Las API Keys generadas son únicas y seguras
 
-#### Configurar el CRON_SECRET en Supabase (Opcional)
+#### ⭐ Método Recomendado: Bearer Token
+- Usa el **Supabase Anon Key** en el header `Authorization`
+- Es seguro porque:
+  - El anon key está diseñado para ser público
+  - Las RLS policies protegen los datos
+  - No aparece en logs de URLs
+  - Es el estándar de la industria
 
-Por defecto, la función acepta cualquier secret. Para mayor seguridad, configura una variable de entorno:
+#### Método Alternativo: Query Parameter Secret
+- Usa un secret personalizado en `?secret=TU_SECRET`
+- Menos seguro porque:
+  - El secret aparece en la URL
+  - Puede quedar registrado en logs
+  - Requiere configuración adicional
+
+#### Configurar CRON_SECRET (Solo si usas Query Parameter)
+
+Si prefieres usar `?secret=`, configura la variable de entorno:
 
 1. Ve a tu proyecto en Supabase Dashboard
 2. Settings → Edge Functions → Environment Variables
@@ -274,7 +308,12 @@ Por defecto, la función acepta cualquier secret. Para mayor seguridad, configur
    - **Value:** `tu-secret-super-seguro-generado`
 4. Guarda los cambios
 
-Si no configuras `CRON_SECRET`, la función usa un valor por defecto (menos seguro).
+Si no configuras `CRON_SECRET`, la función usa un valor por defecto.
+
+#### Permisos
+- La función solo puede **crear** aplicaciones, no modificar o eliminar
+- Las API Keys generadas son únicas y seguras
+- Respeta todas las RLS policies de la base de datos
 
 ### Errores Comunes
 
