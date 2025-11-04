@@ -3,13 +3,15 @@ import { X } from 'lucide-react';
 import type { Plan, Application } from '../lib/admin-api';
 
 interface PlanModalProps {
-  plan?: Plan;
+  plan: Plan | null;
   applications: Application[];
   onClose: () => void;
-  onSave: (data: any) => Promise<void>;
+  onCreate: (data: any) => void;
+  onUpdate?: (data: any) => void;
 }
 
-export function PlanModal({ plan, applications, onClose, onSave }: PlanModalProps) {
+export function PlanModal({ plan, applications, onClose, onCreate, onUpdate }: PlanModalProps) {
+  const isEditing = plan !== null;
   const [loading, setLoading] = useState(false);
   const [entitlements, setEntitlements] = useState<Record<string, any>>(
     plan?.entitlements || {
@@ -34,10 +36,16 @@ export function PlanModal({ plan, applications, onClose, onSave }: PlanModalProp
     setLoading(true);
 
     try {
-      await onSave({
+      const data = {
         ...formData,
         entitlements,
-      });
+      };
+
+      if (isEditing && onUpdate) {
+        onUpdate(data);
+      } else {
+        onCreate(data);
+      }
       onClose();
     } catch (error) {
       console.error('Error saving plan:', error);

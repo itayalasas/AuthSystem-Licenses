@@ -1,7 +1,8 @@
 import { Application, Plan } from '../lib/admin-api';
 import { CompactCard } from './CompactCard';
 import { Button } from './Button';
-import { Plus, Users, Globe, Edit2, Trash2, Key, Eye, CreditCard } from 'lucide-react';
+import { PlanSelector } from './PlanSelector';
+import { Plus, Users, Globe, Edit2, Trash2, Key, Eye } from 'lucide-react';
 
 interface ApplicationsViewProps {
   applications: Application[];
@@ -10,7 +11,7 @@ interface ApplicationsViewProps {
   onEdit: (app: Application) => void;
   onDelete: (appId: string) => void;
   onViewUsers: (app: Application) => void;
-  onAssignPlan: (app: Application, planId: string) => void;
+  onAssignPlan: (app: Application, planId: string) => Promise<void>;
 }
 
 export function ApplicationsView({ applications, plans, onAdd, onEdit, onDelete, onViewUsers, onAssignPlan }: ApplicationsViewProps) {
@@ -63,43 +64,11 @@ export function ApplicationsView({ applications, plans, onAdd, onEdit, onDelete,
                   </span>
                 </button>
 
-                {app.plan_id ? (
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={app.plan_id}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        onAssignPlan(app, e.target.value);
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-xs border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      {plans.map(plan => (
-                        <option key={plan.id} value={plan.id}>{plan.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <CreditCard size={14} className="text-gray-400 flex-shrink-0" />
-                    <select
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        if (e.target.value) {
-                          onAssignPlan(app, e.target.value);
-                        }
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-xs border border-gray-300 rounded px-2 py-1 text-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      defaultValue=""
-                    >
-                      <option value="">Sin plan asignado</option>
-                      {plans.map(plan => (
-                        <option key={plan.id} value={plan.id}>{plan.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <PlanSelector
+                  app={app}
+                  plans={plans}
+                  onAssignPlan={onAssignPlan}
+                />
                 {app.webhook_url && (
                   <div className="flex items-center gap-2 text-xs text-gray-600">
                     <Globe size={14} className="flex-shrink-0" />

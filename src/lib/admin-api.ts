@@ -338,6 +338,33 @@ class AdminAPIService {
     return result.data;
   }
 
+  async updatePlan(planId: string, data: any): Promise<Plan> {
+    const response = await fetch(`${getAdminApiUrl()}/plans/${planId}`, {
+      method: 'PUT',
+      headers: this.headers,
+      body: JSON.stringify(data),
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to update plan');
+    }
+
+    return result.data;
+  }
+
+  async deletePlan(planId: string): Promise<void> {
+    const response = await fetch(`${getAdminApiUrl()}/plans/${planId}`, {
+      method: 'DELETE',
+      headers: this.headers,
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to delete plan');
+    }
+  }
+
   async updateApplication(applicationId: string, data: {
     name?: string;
     webhook_url?: string;

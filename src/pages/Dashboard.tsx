@@ -29,6 +29,7 @@ import { TenantDetailModal } from '../components/TenantDetailModal';
 import { ApplicationModal } from '../components/ApplicationModal';
 import { PlanModal } from '../components/PlanModal';
 import { ApplicationUsersModal } from '../components/ApplicationUsersModal';
+import { PlanCard } from '../components/PlanCard';
 
 export function Dashboard() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -214,6 +215,30 @@ export function Dashboard() {
       await loadDashboardData();
     } catch (err) {
       showError('Error al asignar el plan');
+    }
+  };
+
+  const handleUpdatePlan = async (data: any) => {
+    if (!selectedPlan) return;
+
+    try {
+      await adminApi.updatePlan(selectedPlan.id, data);
+      setShowPlanModal(false);
+      setSelectedPlan(null);
+      success('Plan actualizado exitosamente');
+      await loadDashboardData();
+    } catch (err) {
+      showError('Error al actualizar el plan');
+    }
+  };
+
+  const handleDeletePlan = async (planId: string) => {
+    try {
+      await adminApi.deletePlan(planId);
+      success('Plan eliminado exitosamente');
+      await loadDashboardData();
+    } catch (err) {
+      showError('Error al eliminar el plan');
     }
   };
 
@@ -438,21 +463,15 @@ export function Dashboard() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {plans.map((plan) => (
-                    <div
+                    <PlanCard
                       key={plan.id}
-                      className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow"
-                    >
-                      <h3 className="font-semibold text-gray-900 text-lg">{plan.name}</h3>
-                      <p className="text-sm text-gray-600 mt-1">{plan.description}</p>
-                      <div className="mt-4">
-                        <span className="text-3xl font-bold text-gray-900">
-                          {plan.price === 0 ? 'Gratis' : `$${plan.price}`}
-                        </span>
-                        <span className="text-gray-600 text-sm">
-                          /{plan.billing_cycle === 'monthly' ? 'mes' : 'año'}
-                        </span>
-                      </div>
-                    </div>
+                      plan={plan}
+                      onEdit={(p) => {
+                        setSelectedPlan(p);
+                        setShowPlanModal(true);
+                      }}
+                      onDelete={handleDeletePlan}
+                    />
                   ))}
                 </div>
               </div>
@@ -608,6 +627,7 @@ export function Dashboard() {
             setSelectedPlan(null);
           }}
           onCreate={handleCreatePlan}
+          onUpdate={handleUpdatePlan}
         />
       )}
 
