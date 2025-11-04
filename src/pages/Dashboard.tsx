@@ -12,19 +12,19 @@ import {
   Building2,
   Package,
   Activity,
-  Plus,
-  Settings,
-  Search,
-  Eye,
-  Shield,
-  CreditCard,
   LogOut,
   User,
   BookOpen,
   DollarSign,
-  Edit2,
   RefreshCw,
+  Shield,
 } from 'lucide-react';
+import { ToastContainer } from '../components/Toast';
+import { useToast } from '../hooks/useToast';
+import { StatCard } from '../components/StatCard';
+import { Button } from '../components/Button';
+import { TenantsView } from '../components/TenantsView';
+import { ApplicationsView } from '../components/ApplicationsView';
 import { TenantDetailModal } from '../components/TenantDetailModal';
 import { ApplicationModal } from '../components/ApplicationModal';
 import { PlanModal } from '../components/PlanModal';
@@ -37,6 +37,7 @@ export function Dashboard() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [activeView, setActiveView] = useState<'dashboard' | 'tenants' | 'applications' | 'plans' | 'manual'>(
     'dashboard'
   );
@@ -47,6 +48,7 @@ export function Dashboard() {
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const { toasts, removeToast, success, error: showError, info } = useToast();
 
   useEffect(() => {
     const currentUser = AuthService.getUser();
@@ -56,8 +58,8 @@ export function Dashboard() {
     }
 
     if (AuthService.isTokenExpired(AuthService.getTokens()?.token || '')) {
-      AuthService.refreshToken().then((success) => {
-        if (!success) {
+      AuthService.refreshToken().then((isSuccess) => {
+        if (!isSuccess) {
           AuthService.logout();
         }
       });
@@ -70,20 +72,19 @@ export function Dashboard() {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      console.log('Loading dashboard data...');
       const [statsData, tenantsData, appsData, plansData] = await Promise.all([
         adminApi.getStats(),
         adminApi.getTenants(),
         adminApi.getApplications(),
         adminApi.getPlans(),
       ]);
-      console.log('Dashboard data loaded:', { statsData, tenantsData, appsData, plansData });
       setStats(statsData);
       setTenants(tenantsData);
       setApplications(appsData);
       setPlans(plansData);
-    } catch (error) {
-      console.error('Failed to load dashboard:', error);
+    } catch (err) {
+      console.error('Failed to load dashboard:', err);
+      showError('Error al cargar los datos del dashboard');
       setStats({ tenants_count: 0, active_subscriptions: 0, applications_count: 0, recent_tenants: [] });
       setTenants([]);
       setApplications([]);
@@ -108,10 +109,11 @@ export function Dashboard() {
       });
 
       setShowCreateTenantModal(false);
-      loadDashboardData();
-    } catch (error) {
-      console.error('Failed to create tenant:', error);
-      alert('Error al crear el cliente');
+      success('Cliente creado exitosamente');
+      await loadDashboardData();
+    } catch (err) {
+      console.error('Failed to create tenant:', err);
+      showError('Error al crear el cliente');
     }
   };
 
@@ -120,25 +122,46 @@ export function Dashboard() {
   };
 
   const handleCreateApplication = async (data: any) => {
-    await adminApi.createApplication(data);
-    loadDashboardData();
+    try {
+      await adminApi.createApplication(data);
+      setShowApplicationModal(false);
+      setSelectedApplication(null);
+      success('Aplicación creada exitosamente');
+      await loadDashboardData();
+    } catch (err) {
+      showError('Error al crear la aplicación');
+    }
   };
 
   const handleUpdateApplication = async (data: any) => {
-    if (selectedApplication) {
+    if (!selectedApplication) return;
+
+    try {
       await adminApi.updateApplication(selectedApplication.id, data);
-      loadDashboardData();
+      setShowApplicationModal(false);
+      setSelectedApplication(null);
+      success('Aplicación actualizada exitosamente');
+      await loadDashboardData();
+    } catch (err) {
+      showError('Error al actualizar la aplicación');
     }
   };
 
   const handleDeleteApplication = async (applicationId: string) => {
-    await adminApi.deleteApplication(applicationId);
-    loadDashboardData();
+    try {
+      await adminApi.deleteApplication(applicationId);
+      success('Aplicación eliminada exitosamente');
+      await loadDashboardData();
+    } catch (err) {
+      showError('Error al eliminar la aplicación');
+    }
   };
 
   const handleSyncApplications = async () => {
     try {
-      setLoading(true);
+      setSyncing(true);
+      info('Sincronizando aplicaciones...');
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-applications`,
         {
@@ -151,227 +174,196 @@ export function Dashboard() {
       const result = await response.json();
 
       if (result.success) {
-        alert(`Sincronización completada:\n- Nuevas: ${result.summary.newly_created}\n- Ya existentes: ${result.summary.already_exists}`);
+        success(
+          `Sincronización completada: ${result.summary.newly_created} nuevas, ` +
+          `${result.summary.total_users_synced} usuarios actualizados`
+        );
         await loadDashboardData();
       } else {
-        alert(`Error en la sincronización: ${result.error}`);
+        showError(`Error en la sincronización: ${result.error}`);
       }
-    } catch (error) {
-      console.error('Failed to sync applications:', error);
-      alert('Error al sincronizar aplicaciones');
+    } catch (err) {
+      console.error('Failed to sync applications:', err);
+      showError('Error al sincronizar aplicaciones');
     } finally {
-      setLoading(false);
+      setSyncing(false);
     }
   };
 
   const handleCreatePlan = async (data: any) => {
-    await adminApi.createPlan(data);
-    loadDashboardData();
+    try {
+      await adminApi.createPlan(data);
+      setShowPlanModal(false);
+      setSelectedPlan(null);
+      success('Plan creado exitosamente');
+      await loadDashboardData();
+    } catch (err) {
+      showError('Error al crear el plan');
+    }
   };
 
   if (loading || !user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando panel de administración...</p>
+          <p className="text-gray-600 font-medium">Cargando...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      <div className="flex h-screen">
-        <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
-          <div className="p-6 border-b border-gray-200">
+    <div className="min-h-screen bg-gray-50">
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+      {/* Top Navigation */}
+      <nav className="bg-white border-b border-gray-200 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-lg">
                 <Shield className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-lg font-bold text-gray-900">Panel de Admin</h1>
-                <p className="text-xs text-gray-500">Gestor de Suscripciones</p>
+                <h1 className="text-lg font-bold text-gray-900">Admin Panel</h1>
+                <p className="text-xs text-gray-500">Subscription Manager</p>
               </div>
             </div>
-          </div>
 
-          <nav className="flex-1 p-4">
-            <button
-              onClick={() => setActiveView('dashboard')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg mb-2 transition-colors ${
-                activeView === 'dashboard'
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <Activity className="w-5 h-5" />
-              <span className="font-medium">Inicio</span>
-            </button>
-
-            <button
-              onClick={() => setActiveView('tenants')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg mb-2 transition-colors ${
-                activeView === 'tenants'
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <Building2 className="w-5 h-5" />
-              <span className="font-medium">Clientes</span>
-            </button>
-
-            <button
-              onClick={() => setActiveView('applications')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg mb-2 transition-colors ${
-                activeView === 'applications'
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <Package className="w-5 h-5" />
-              <span className="font-medium">Aplicaciones</span>
-            </button>
-
-            <button
-              onClick={() => setActiveView('plans')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg mb-2 transition-colors ${
-                activeView === 'plans'
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <DollarSign className="w-5 h-5" />
-              <span className="font-medium">Planes</span>
-            </button>
-
-            <button
-              onClick={() => setActiveView('manual')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg mb-2 transition-colors ${
-                activeView === 'manual'
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <BookOpen className="w-5 h-5" />
-              <span className="font-medium">Manual de Uso</span>
-            </button>
-          </nav>
-
-          <div className="p-4 border-t border-gray-200">
-            <div className="relative">
-              <button
-                onClick={() => setShowUserMenu(!showUserMenu)}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 rounded-lg transition-colors"
+            <div className="flex items-center gap-4">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleSyncApplications}
+                loading={syncing}
+                icon={<RefreshCw size={14} />}
               >
-                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                  <User className="w-4 h-4 text-white" />
-                </div>
-                <div className="flex-1 min-w-0 text-left">
-                  <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
-                  <p className="text-xs text-gray-500 truncate">{user.email}</p>
-                </div>
-              </button>
+                Sincronizar
+              </Button>
 
-              {showUserMenu && (
-                <div className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
-                  <div className="p-2">
-                    <div className="px-3 py-2 text-xs text-gray-500 border-b border-gray-100 mb-1">
-                      <p className="font-medium">Rol: {user.role}</p>
+              <div className="relative">
+                <button
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <User className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">{user.name}</span>
+                </button>
+
+                {showUserMenu && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 animate-scale-in">
+                    <div className="px-4 py-3 border-b border-gray-100">
+                      <p className="text-sm font-medium text-gray-900">{user.name}</p>
+                      <p className="text-xs text-gray-500">{user.email}</p>
                     </div>
                     <button
                       onClick={handleLogout}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded transition-colors"
+                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
                     >
-                      <LogOut className="w-4 h-4" />
+                      <LogOut size={14} />
                       Cerrar Sesión
                     </button>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
+        </div>
+      </nav>
+
+      {/* Side Navigation */}
+      <div className="flex">
+        <aside className="w-64 bg-white border-r border-gray-200 min-h-[calc(100vh-4rem)] sticky top-16">
+          <nav className="p-4 space-y-1">
+            {[
+              { id: 'dashboard', label: 'Dashboard', icon: Activity },
+              { id: 'tenants', label: 'Clientes', icon: Building2 },
+              { id: 'applications', label: 'Aplicaciones', icon: Package },
+              { id: 'plans', label: 'Planes', icon: DollarSign },
+              { id: 'manual', label: 'Documentación', icon: BookOpen },
+            ].map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setActiveView(id as any)}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  activeView === id
+                    ? 'bg-blue-50 text-blue-700'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <Icon size={18} />
+                {label}
+              </button>
+            ))}
+          </nav>
         </aside>
 
-        <main className="flex-1 overflow-auto">
-          {activeView === 'dashboard' && (
-            <div className="p-8">
-              <div className="mb-8">
-                <h2 className="text-3xl font-bold text-gray-900 mb-2">
-                  Hola, {user.name.split(' ')[0]} 👋
-                </h2>
-                <p className="text-gray-600">Resumen de tu sistema de suscripciones</p>
-              </div>
-
-              <div className="grid md:grid-cols-4 gap-6 mb-8">
-                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <Building2 className="w-6 h-6 text-blue-600" />
-                    </div>
-                  </div>
-                  <h3 className="text-sm font-medium text-gray-600 mb-1">Total Clientes</h3>
-                  <p className="text-3xl font-bold text-gray-900">{stats?.tenants_count || 0}</p>
-                </div>
-
-                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                      <CreditCard className="w-6 h-6 text-green-600" />
-                    </div>
-                  </div>
-                  <h3 className="text-sm font-medium text-gray-600 mb-1">Suscripciones Activas</h3>
-                  <p className="text-3xl font-bold text-gray-900">
-                    {stats?.active_subscriptions || 0}
+        {/* Main Content */}
+        <main className="flex-1 p-8">
+          <div className="max-w-7xl mx-auto">
+            {activeView === 'dashboard' && (
+              <div className="space-y-6 animate-fade-in">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Resumen general del sistema
                   </p>
                 </div>
 
-                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                      <Package className="w-6 h-6 text-purple-600" />
-                    </div>
-                  </div>
-                  <h3 className="text-sm font-medium text-gray-600 mb-1">Aplicaciones</h3>
-                  <p className="text-3xl font-bold text-gray-900">
-                    {stats?.applications_count || 0}
-                  </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <StatCard
+                    title="Total Clientes"
+                    value={stats?.tenants_count || 0}
+                    icon={Users}
+                    color="blue"
+                  />
+                  <StatCard
+                    title="Suscripciones Activas"
+                    value={stats?.active_subscriptions || 0}
+                    icon={Activity}
+                    color="green"
+                  />
+                  <StatCard
+                    title="Aplicaciones"
+                    value={stats?.applications_count || 0}
+                    icon={Package}
+                    color="purple"
+                  />
+                  <StatCard
+                    title="Planes Disponibles"
+                    value={plans.length}
+                    icon={DollarSign}
+                    color="orange"
+                  />
                 </div>
 
-                <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                      <Activity className="w-6 h-6 text-orange-600" />
-                    </div>
-                  </div>
-                  <h3 className="text-sm font-medium text-gray-600 mb-1">Ingresos Mensuales</h3>
-                  <p className="text-3xl font-bold text-gray-900">$0</p>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-                <div className="p-6 border-b border-gray-100">
-                  <h3 className="text-lg font-bold text-gray-900">Clientes Recientes</h3>
-                </div>
-                <div className="p-6">
-                  {stats?.recent_tenants && stats.recent_tenants.length > 0 ? (
-                    <div className="space-y-4">
-                      {stats.recent_tenants.map((tenant) => (
+                {/* Recent Tenants */}
+                {stats?.recent_tenants && stats.recent_tenants.length > 0 && (
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                      Clientes Recientes
+                    </h3>
+                    <div className="space-y-3">
+                      {stats.recent_tenants.slice(0, 5).map((tenant) => (
                         <div
                           key={tenant.id}
-                          className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                          className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                          onClick={() => setSelectedTenant(tenant)}
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                               <Building2 className="w-5 h-5 text-blue-600" />
                             </div>
                             <div>
-                              <p className="font-medium text-gray-900">{tenant.name}</p>
-                              <p className="text-sm text-gray-500">{tenant.owner_email}</p>
+                              <p className="text-sm font-medium text-gray-900">{tenant.name}</p>
+                              <p className="text-xs text-gray-500">{tenant.owner_email}</p>
                             </div>
                           </div>
                           <span
-                            className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                            className={`px-2 py-1 text-xs font-medium rounded-full ${
                               tenant.status === 'active'
                                 ? 'bg-green-100 text-green-700'
                                 : 'bg-gray-100 text-gray-700'
@@ -382,693 +374,230 @@ export function Dashboard() {
                         </div>
                       ))}
                     </div>
-                  ) : (
-                    <p className="text-gray-500 text-center py-8">No hay clientes aún</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeView === 'tenants' && (
-            <div className="p-8">
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <h2 className="text-3xl font-bold text-gray-900 mb-2">Clientes</h2>
-                  <p className="text-gray-600">Gestiona organizaciones de clientes</p>
-                </div>
-                <button
-                  onClick={() => setShowCreateTenantModal(true)}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-                >
-                  <Plus className="w-5 h-5" />
-                  Crear Cliente
-                </button>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-                <div className="p-6 border-b border-gray-100">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Buscar clientes..."
-                      className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
                   </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-50 border-b border-gray-100">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                          Organización
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                          Propietario
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                          Aplicaciones
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                          Estado
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                          Acciones
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {tenants.map((tenant) => (
-                        <tr key={tenant.id} className="hover:bg-gray-50 transition-colors">
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                                <Building2 className="w-5 h-5 text-blue-600" />
-                              </div>
-                              <div>
-                                <p className="font-medium text-gray-900">{tenant.name}</p>
-                                <p className="text-sm text-gray-500">{tenant.domain}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <p className="text-sm text-gray-900">{tenant.owner_email}</p>
-                          </td>
-                          <td className="px-6 py-4">
-                            <p className="text-sm text-gray-900">
-                              {tenant.tenant_applications?.length || 0} apps
-                            </p>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span
-                              className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                tenant.status === 'active'
-                                  ? 'bg-green-100 text-green-700'
-                                  : 'bg-gray-100 text-gray-700'
-                              }`}
-                            >
-                              {tenant.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <button
-                              onClick={() => setSelectedTenant(tenant)}
-                              className="text-blue-600 hover:text-blue-800 font-medium text-sm"
-                            >
-                              <Eye className="w-5 h-5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                )}
               </div>
-            </div>
-          )}
+            )}
 
-          {activeView === 'applications' && (
-            <div className="p-8">
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <h2 className="text-3xl font-bold text-gray-900 mb-2">Aplicaciones</h2>
-                  <p className="text-gray-600">Gestiona aplicaciones registradas</p>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={handleSyncApplications}
-                    disabled={loading}
-                    className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-                    {loading ? 'Sincronizando...' : 'Sincronizar'}
-                  </button>
-                  <button
-                    type="button"
+            {activeView === 'tenants' && (
+              <div className="animate-fade-in">
+                <TenantsView
+                  tenants={tenants}
+                  onAdd={() => setShowCreateTenantModal(true)}
+                  onView={(tenant) => setSelectedTenant(tenant)}
+                />
+              </div>
+            )}
+
+            {activeView === 'applications' && (
+              <div className="animate-fade-in">
+                <ApplicationsView
+                  applications={applications}
+                  onAdd={() => {
+                    setSelectedApplication(null);
+                    setShowApplicationModal(true);
+                  }}
+                  onEdit={(app) => {
+                    setSelectedApplication(app);
+                    setShowApplicationModal(true);
+                  }}
+                  onDelete={handleDeleteApplication}
+                />
+              </div>
+            )}
+
+            {activeView === 'plans' && (
+              <div className="animate-fade-in space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Planes</h2>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Gestiona los planes de suscripción
+                    </p>
+                  </div>
+                  <Button
                     onClick={() => {
-                      setSelectedApplication(null);
-                      setShowApplicationModal(true);
+                      setSelectedPlan(null);
+                      setShowPlanModal(true);
                     }}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                    icon={<DollarSign size={16} />}
                   >
-                    <Plus className="w-5 h-5" />
-                    Nueva Aplicación
-                  </button>
+                    Nuevo Plan
+                  </Button>
                 </div>
-              </div>
 
-              {applications.length === 0 ? (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-8 text-center">
-                  <Package className="w-16 h-16 text-blue-600 mx-auto mb-4" />
-                  <h3 className="text-xl font-bold text-blue-900 mb-2">
-                    No hay aplicaciones registradas
-                  </h3>
-                  <p className="text-blue-800 mb-4">
-                    Haz clic en "Sincronizar" para cargar las aplicaciones desde el sistema de autenticación, o crea una nueva manualmente.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleSyncApplications}
-                    disabled={loading}
-                    className="mx-auto flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-                    {loading ? 'Sincronizando...' : 'Sincronizar Aplicaciones'}
-                  </button>
-                </div>
-              ) : (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {applications.map((app) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {plans.map((plan) => (
                     <div
-                      key={app.id}
-                      className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow"
+                      key={plan.id}
+                      className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow"
                     >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                        <Package className="w-6 h-6 text-white" />
-                      </div>
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          app.is_active
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        {app.is_active ? 'Activa' : 'Inactiva'}
-                      </span>
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">{app.name}</h3>
-                    <p className="text-sm text-gray-500 mb-4">{app.slug}</p>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-600">App ID:</span>
-                        <span className="font-mono text-gray-900 text-xs">
-                          {app.external_app_id}
+                      <h3 className="font-semibold text-gray-900 text-lg">{plan.name}</h3>
+                      <p className="text-sm text-gray-600 mt-1">{plan.description}</p>
+                      <div className="mt-4">
+                        <span className="text-3xl font-bold text-gray-900">
+                          {plan.price === 0 ? 'Gratis' : `$${plan.price}`}
+                        </span>
+                        <span className="text-gray-600 text-sm">
+                          /{plan.billing_cycle === 'monthly' ? 'mes' : 'año'}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-600">API Key:</span>
-                        <span className="font-mono text-gray-900 text-xs">
-                          {app.api_key.substring(0, 16)}...
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setSelectedApplication(app);
-                        setShowApplicationModal(true);
-                      }}
-                      className="mt-4 w-full bg-gray-50 hover:bg-gray-100 text-gray-700 py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Settings className="w-4 h-4" />
-                      Configurar
-                    </button>
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
-          )}
-
-          {activeView === 'plans' && (
-            <div className="p-8">
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <h2 className="text-3xl font-bold text-gray-900 mb-2">Planes</h2>
-                  <p className="text-gray-600">Gestiona planes de suscripción para tus aplicaciones</p>
-                </div>
-                <button
-                  onClick={() => {
-                    setSelectedPlan(null);
-                    setShowPlanModal(true);
-                  }}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-                >
-                  <Plus className="w-5 h-5" />
-                  Crear Plan
-                </button>
               </div>
+            )}
 
-              {applications.length === 0 ? (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center">
-                  <h3 className="text-lg font-bold text-yellow-900 mb-2">
-                    No hay aplicaciones registradas
-                  </h3>
-                  <p className="text-yellow-800 mb-4">
-                    Debes crear al menos una aplicación antes de poder crear planes.
-                  </p>
-                  <button
-                    onClick={() => setActiveView('applications')}
-                    className="bg-yellow-600 text-white px-6 py-2 rounded-lg hover:bg-yellow-700 transition-colors"
-                  >
-                    Ir a Aplicaciones
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {applications.map((app) => {
-                    const appPlans = plans.filter((p) => p.application_id === app.id);
-
-                    return (
-                      <div key={app.id} className="bg-white rounded-xl shadow-sm border border-gray-100">
-                        <div className="p-6 border-b border-gray-100">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                                <Package className="w-6 h-6 text-white" />
-                              </div>
-                              <div>
-                                <h3 className="text-lg font-bold text-gray-900">{app.name}</h3>
-                                <p className="text-sm text-gray-500">{appPlans.length} planes</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="p-6">
-                          {appPlans.length === 0 ? (
-                            <p className="text-gray-500 text-center py-8">
-                              No hay planes para esta aplicación
-                            </p>
-                          ) : (
-                            <div className="grid md:grid-cols-3 gap-4">
-                              {appPlans.map((plan) => (
-                                <div
-                                  key={plan.id}
-                                  className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow"
-                                >
-                                  <div className="mb-4">
-                                    <h4 className="text-lg font-bold text-gray-900 mb-1">
-                                      {plan.name}
-                                    </h4>
-                                    {plan.description && (
-                                      <p className="text-sm text-gray-600">{plan.description}</p>
-                                    )}
-                                  </div>
-
-                                  <div className="mb-4">
-                                    <div className="flex items-baseline gap-1">
-                                      <span className="text-3xl font-bold text-gray-900">
-                                        {plan.price}
-                                      </span>
-                                      <span className="text-gray-600">{plan.currency}</span>
-                                      <span className="text-gray-500">
-                                        /{plan.billing_cycle === 'monthly' ? 'mes' : 'año'}
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  <div className="space-y-2 mb-4">
-                                    <div className="flex items-center justify-between text-sm">
-                                      <span className="text-gray-600">Usuarios:</span>
-                                      <span className="font-medium text-gray-900">
-                                        {plan.entitlements?.max_users || 0}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-sm">
-                                      <span className="text-gray-600">Almacenamiento:</span>
-                                      <span className="font-medium text-gray-900">
-                                        {plan.entitlements?.max_storage_gb || 0} GB
-                                      </span>
-                                    </div>
-                                    {plan.trial_days > 0 && (
-                                      <div className="flex items-center justify-between text-sm">
-                                        <span className="text-gray-600">Prueba:</span>
-                                        <span className="font-medium text-green-600">
-                                          {plan.trial_days} días
-                                        </span>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {plan.entitlements?.features &&
-                                    Object.keys(plan.entitlements.features).length > 0 && (
-                                      <div className="border-t border-gray-100 pt-4 mb-4">
-                                        <p className="text-xs font-medium text-gray-600 mb-2">
-                                          FUNCIONALIDADES:
-                                        </p>
-                                        <div className="space-y-1">
-                                          {Object.entries(plan.entitlements.features).map(
-                                            ([key, value]) => (
-                                              <div
-                                                key={key}
-                                                className="flex items-center gap-2 text-sm"
-                                              >
-                                                <div
-                                                  className={`w-2 h-2 rounded-full ${
-                                                    value ? 'bg-green-500' : 'bg-gray-300'
-                                                  }`}
-                                                />
-                                                <span className="text-gray-700">{key}</span>
-                                              </div>
-                                            )
-                                          )}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                  <button
-                                    onClick={() => {
-                                      setSelectedPlan(plan);
-                                      setShowPlanModal(true);
-                                    }}
-                                    className="w-full bg-gray-50 hover:bg-gray-100 text-gray-700 py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2"
-                                  >
-                                    <Edit2 className="w-4 h-4" />
-                                    Editar
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeView === 'manual' && (
-            <div className="p-8">
-              <div className="mb-8">
-                <h2 className="text-3xl font-bold text-gray-900 mb-2">
-                  📖 Manual de Uso
-                </h2>
-                <p className="text-gray-600">Guía completa sobre cómo usar el sistema de licencias</p>
+            {activeView === 'manual' && (
+              <div className="animate-fade-in bg-white rounded-xl border border-gray-200 p-8">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">Documentación</h2>
+                <p className="text-gray-600 mb-6">
+                  Consulta la documentación completa del sistema en los archivos:
+                </p>
+                <ul className="space-y-2 text-sm text-gray-700">
+                  <li className="flex items-center gap-2">
+                    <BookOpen size={16} className="text-blue-600" />
+                    <code className="bg-gray-100 px-2 py-1 rounded">MANUAL_DE_USO.md</code>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <BookOpen size={16} className="text-blue-600" />
+                    <code className="bg-gray-100 px-2 py-1 rounded">CONFIGURACION_CRON_SYNC.md</code>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <BookOpen size={16} className="text-blue-600" />
+                    <code className="bg-gray-100 px-2 py-1 rounded">INTEGRACION_PARA_DESARROLLADORES.md</code>
+                  </li>
+                </ul>
               </div>
-
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
-                <div className="prose max-w-none">
-                  <div className="mb-8 p-6 bg-blue-50 border border-blue-200 rounded-lg">
-                    <h3 className="text-xl font-bold text-blue-900 mb-3">🎯 ¿Qué es este sistema?</h3>
-                    <p className="text-blue-800">
-                      Este es un <strong>sistema centralizado de gestión de licencias y suscripciones</strong> que te permite:
-                    </p>
-                    <ul className="list-disc list-inside text-blue-800 mt-3 space-y-1">
-                      <li>Administrar múltiples aplicaciones desde un solo lugar</li>
-                      <li>Crear clientes (tenants) que pueden usar tus aplicaciones</li>
-                      <li>Asignar planes y licencias a cada cliente</li>
-                      <li>Controlar el acceso de los clientes a las funcionalidades</li>
-                    </ul>
-                  </div>
-
-                  <div className="space-y-8">
-                    <section>
-                      <h3 className="text-2xl font-bold text-gray-900 mb-4">📋 Conceptos Clave</h3>
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <div className="p-4 bg-gray-50 rounded-lg">
-                          <h4 className="font-bold text-lg text-gray-900 mb-2">🔷 Application (Aplicación)</h4>
-                          <p className="text-gray-700 text-sm">Una aplicación que desarrollaste y quieres licenciar.</p>
-                          <p className="text-gray-600 text-sm mt-2"><strong>Ejemplo:</strong> "Mi Sistema de Facturación", "Mi CRM"</p>
-                        </div>
-                        <div className="p-4 bg-gray-50 rounded-lg">
-                          <h4 className="font-bold text-lg text-gray-900 mb-2">🔷 Tenant (Cliente)</h4>
-                          <p className="text-gray-700 text-sm">Una empresa o persona que usa tus aplicaciones.</p>
-                          <p className="text-gray-600 text-sm mt-2"><strong>Ejemplo:</strong> "Empresa ABC S.A.", "Juan Pérez"</p>
-                        </div>
-                        <div className="p-4 bg-gray-50 rounded-lg">
-                          <h4 className="font-bold text-lg text-gray-900 mb-2">🔷 Plan</h4>
-                          <p className="text-gray-700 text-sm">Un nivel de servicio con funcionalidades específicas.</p>
-                          <p className="text-gray-600 text-sm mt-2"><strong>Ejemplo:</strong> Plan Básico $10/mes, Plan Pro $50/mes</p>
-                        </div>
-                        <div className="p-4 bg-gray-50 rounded-lg">
-                          <h4 className="font-bold text-lg text-gray-900 mb-2">🔷 Subscription (Licencia)</h4>
-                          <p className="text-gray-700 text-sm">La relación entre un Cliente, una Aplicación y un Plan.</p>
-                          <p className="text-gray-600 text-sm mt-2"><strong>Ejemplo:</strong> "Empresa ABC tiene Plan Pro hasta 31/12/2025"</p>
-                        </div>
-                      </div>
-                    </section>
-
-                    <section className="border-t border-gray-200 pt-8">
-                      <h3 className="text-2xl font-bold text-gray-900 mb-4">🚀 Proceso Paso a Paso</h3>
-                      <div className="space-y-6">
-                        <div className="flex gap-4">
-                          <div className="flex-shrink-0 w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
-                            1
-                          </div>
-                          <div className="flex-1">
-                            <h4 className="font-bold text-lg text-gray-900 mb-2">Registrar tu Aplicación</h4>
-                            <p className="text-gray-700 mb-2">Ve a la sección "Aplicaciones" y registra cada app que quieres licenciar.</p>
-                            <p className="text-sm text-gray-600"><strong>Datos necesarios:</strong> Nombre, Slug, External App ID</p>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-4">
-                          <div className="flex-shrink-0 w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
-                            2
-                          </div>
-                          <div className="flex-1">
-                            <h4 className="font-bold text-lg text-gray-900 mb-2">Crear Planes de Suscripción</h4>
-                            <p className="text-gray-700 mb-2">Los planes definen qué funcionalidades y límites tiene cada nivel.</p>
-                            <p className="text-sm text-gray-600"><strong>Por ahora:</strong> Se crean directamente en la base de datos</p>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-4">
-                          <div className="flex-shrink-0 w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
-                            3
-                          </div>
-                          <div className="flex-1">
-                            <h4 className="font-bold text-lg text-gray-900 mb-2">Crear un Cliente (Tenant)</h4>
-                            <p className="text-gray-700 mb-2">Click en "Crear Nuevo Cliente" y completa el formulario.</p>
-                            <p className="text-sm text-gray-600"><strong>Datos:</strong> Nombre, Email, Organización, Dominio</p>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-4">
-                          <div className="flex-shrink-0 w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
-                            4
-                          </div>
-                          <div className="flex-1">
-                            <h4 className="font-bold text-lg text-gray-900 mb-2">Asignar una Licencia</h4>
-                            <p className="text-gray-700 mb-2">Selecciona el cliente, click en "Asignar Aplicación".</p>
-                            <p className="text-sm text-gray-600"><strong>Selecciona:</strong> Aplicación, Plan, Periodo de prueba</p>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-4">
-                          <div className="flex-shrink-0 w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
-                            5
-                          </div>
-                          <div className="flex-1">
-                            <h4 className="font-bold text-lg text-gray-900 mb-2">Integrar tu Aplicación</h4>
-                            <p className="text-gray-700 mb-2">Tu aplicación debe verificar las licencias usando la API de validación.</p>
-                            <p className="text-sm text-gray-600"><strong>Endpoint:</strong> /functions/v1/validation-api/validate</p>
-                          </div>
-                        </div>
-                      </div>
-                    </section>
-
-                    <section className="border-t border-gray-200 pt-8">
-                      <h3 className="text-2xl font-bold text-gray-900 mb-4">🔄 Estados de Licencia</h3>
-                      <div className="grid md:grid-cols-3 gap-4">
-                        <div className="p-4 border-l-4 border-yellow-500 bg-yellow-50">
-                          <h4 className="font-bold text-yellow-900">trialing</h4>
-                          <p className="text-sm text-yellow-800">Periodo de prueba activo</p>
-                        </div>
-                        <div className="p-4 border-l-4 border-green-500 bg-green-50">
-                          <h4 className="font-bold text-green-900">active</h4>
-                          <p className="text-sm text-green-800">Suscripción pagada y activa</p>
-                        </div>
-                        <div className="p-4 border-l-4 border-orange-500 bg-orange-50">
-                          <h4 className="font-bold text-orange-900">past_due</h4>
-                          <p className="text-sm text-orange-800">Pago pendiente</p>
-                        </div>
-                        <div className="p-4 border-l-4 border-red-500 bg-red-50">
-                          <h4 className="font-bold text-red-900">canceled</h4>
-                          <p className="text-sm text-red-800">Cancelada por admin</p>
-                        </div>
-                        <div className="p-4 border-l-4 border-gray-500 bg-gray-50">
-                          <h4 className="font-bold text-gray-900">expired</h4>
-                          <p className="text-sm text-gray-800">Periodo terminado</p>
-                        </div>
-                      </div>
-                    </section>
-
-                    <section className="border-t border-gray-200 pt-8">
-                      <h3 className="text-2xl font-bold text-gray-900 mb-4">🔐 Información de Seguridad</h3>
-                      <div className="space-y-4">
-                        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                          <h4 className="font-bold text-red-900 mb-2">⚠️ Token de Admin</h4>
-                          <p className="text-sm text-red-800">Token actual: <code className="bg-red-100 px-2 py-1 rounded">admin_001</code></p>
-                          <p className="text-sm text-red-800 mt-2">
-                            <strong>IMPORTANTE:</strong> Úsalo solo en el backend. Nunca lo expongas en el frontend. Permite acceso completo al sistema.
-                          </p>
-                        </div>
-                        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                          <h4 className="font-bold text-green-900 mb-2">✅ API Keys de Aplicaciones</h4>
-                          <p className="text-sm text-green-800">
-                            Cada aplicación tiene su propia API Key. Se genera automáticamente al crear la app.
-                            Se usa para validar licencias y puede exponerse en el frontend (es segura).
-                          </p>
-                        </div>
-                      </div>
-                    </section>
-
-                    <section className="border-t border-gray-200 pt-8">
-                      <h3 className="text-2xl font-bold text-gray-900 mb-4">📚 Documentación Completa</h3>
-                      <p className="text-gray-700 mb-4">
-                        Para ver la documentación completa con ejemplos de código, APIs y casos de uso avanzados,
-                        consulta el archivo <code className="bg-gray-100 px-2 py-1 rounded text-sm">MANUAL_DE_USO.md</code> en la raíz del proyecto.
-                      </p>
-                      <div className="flex gap-4">
-                        <a
-                          href="https://veymthufmfqhxxxzfmfi.supabase.co"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                        >
-                          🔗 Abrir Supabase Dashboard
-                        </a>
-                      </div>
-                    </section>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </main>
       </div>
 
+      {/* Modals */}
+      {selectedTenant && (
+        <TenantDetailModal
+          tenant={selectedTenant}
+          applications={applications}
+          plans={plans}
+          adminApi={adminApi}
+          onClose={() => setSelectedTenant(null)}
+          onUpdate={() => {
+            loadDashboardData();
+            success('Cliente actualizado exitosamente');
+          }}
+        />
+      )}
+
       {showCreateTenantModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-scale-in">
             <div className="p-6 border-b border-gray-200">
-              <h2 className="text-2xl font-bold text-gray-900">Crear Nuevo Cliente</h2>
+              <h2 className="text-xl font-bold text-gray-900">Crear Nuevo Cliente</h2>
             </div>
-
             <form onSubmit={handleCreateTenant} className="p-6 space-y-4">
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Nombre del Cliente
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    required
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Acme Corp"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Nombre de la Organización
-                  </label>
-                  <input
-                    type="text"
-                    name="organization_name"
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Corporación Acme"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    ID de Usuario Propietario
-                  </label>
-                  <input
-                    type="text"
-                    name="owner_user_id"
-                    required
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="user_123abc"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email del Propietario
-                  </label>
-                  <input
-                    type="email"
-                    name="owner_email"
-                    required
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="owner@acme.com"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email de Facturación
-                  </label>
-                  <input
-                    type="email"
-                    name="billing_email"
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="billing@acme.com"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Dominio</label>
-                  <input
-                    type="text"
-                    name="domain"
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="acme.com"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nombre del Cliente
+                </label>
+                <input
+                  type="text"
+                  name="name"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
               </div>
-
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nombre de la Organización
+                </label>
+                <input
+                  type="text"
+                  name="organization_name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  ID del Usuario Propietario
+                </label>
+                <input
+                  type="text"
+                  name="owner_user_id"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email del Propietario
+                </label>
+                <input
+                  type="email"
+                  name="owner_email"
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email de Facturación
+                </label>
+                <input
+                  type="email"
+                  name="billing_email"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Dominio
+                </label>
+                <input
+                  type="text"
+                  name="domain"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
               <div className="flex gap-3 pt-4">
-                <button
+                <Button type="submit" className="flex-1">
+                  Crear Cliente
+                </Button>
+                <Button
                   type="button"
+                  variant="secondary"
                   onClick={() => setShowCreateTenantModal(false)}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-lg font-medium transition-colors"
+                  className="flex-1"
                 >
                   Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium transition-colors"
-                >
-                  Crear Cliente
-                </button>
+                </Button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {selectedTenant && (
-        <TenantDetailModal
-          tenant={selectedTenant}
-          onClose={() => setSelectedTenant(null)}
-          onRefresh={loadDashboardData}
-          adminApi={adminApi}
-          applications={applications}
-        />
-      )}
-
       {showApplicationModal && (
         <ApplicationModal
-          application={selectedApplication || undefined}
+          application={selectedApplication}
           onClose={() => {
             setShowApplicationModal(false);
             setSelectedApplication(null);
           }}
-          onSave={selectedApplication ? handleUpdateApplication : handleCreateApplication}
-          onDelete={selectedApplication ? handleDeleteApplication : undefined}
+          onCreate={handleCreateApplication}
+          onUpdate={handleUpdateApplication}
         />
       )}
 
       {showPlanModal && (
         <PlanModal
-          plan={selectedPlan || undefined}
+          plan={selectedPlan}
           applications={applications}
           onClose={() => {
             setShowPlanModal(false);
             setSelectedPlan(null);
           }}
-          onSave={handleCreatePlan}
+          onCreate={handleCreatePlan}
         />
       )}
     </div>
