@@ -24,6 +24,8 @@ interface Application {
   webhook_url?: string;
   settings: Record<string, any>;
   is_active: boolean;
+  plan_id?: string;
+  max_users?: number;
   created_at: string;
   updated_at: string;
   users_count?: number;
@@ -399,6 +401,21 @@ class AdminAPIService {
     const result = await response.json();
     if (!result.success) {
       throw new Error(result.error || 'Failed to fetch application users');
+    }
+
+    return result.data;
+  }
+
+  async assignPlanToApplication(applicationId: string, planId: string): Promise<Application> {
+    const response = await fetch(`${getAdminApiUrl()}/applications/${applicationId}/assign-plan`, {
+      method: 'PUT',
+      headers: this.headers,
+      body: JSON.stringify({ plan_id: planId }),
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to assign plan to application');
     }
 
     return result.data;

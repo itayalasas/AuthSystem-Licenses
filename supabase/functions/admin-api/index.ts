@@ -500,6 +500,42 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // PUT /applications/:id/assign-plan - Assign a plan to an application
+    if (path.match(/^applications\/[0-9a-f-]+\/assign-plan$/) && req.method === "PUT") {
+      const applicationId = path.split("/")[1];
+      const body = await req.json();
+      const { plan_id } = body;
+
+      // Get plan details to update max_users
+      const { data: plan } = await supabase
+        .from("plans")
+        .select("entitlements")
+        .eq("id", plan_id)
+        .single();
+
+      const maxUsers = plan?.entitlements?.max_users || 0;
+
+      // Update application with plan
+      const { data, error } = await supabase
+        .from("applications")
+        .update({
+          plan_id: plan_id,
+          max_users: maxUsers
+        })
+        .eq("id", applicationId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return new Response(
+        JSON.stringify({ success: true, data }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     // DELETE /applications/:id - Delete application
     if (path.match(/^applications\/[0-9a-f-]+$/) && req.method === "DELETE") {
       const applicationId = path.split("/")[1];

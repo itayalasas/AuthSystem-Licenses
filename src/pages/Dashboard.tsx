@@ -39,7 +39,7 @@ export function Dashboard() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [activeView, setActiveView] = useState<'dashboard' | 'tenants' | 'applications' | 'plans' | 'manual'>(
+  const [activeView, setActiveView] = useState<'dashboard' | 'applications' | 'plans' | 'manual'>(
     'dashboard'
   );
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
@@ -207,6 +207,16 @@ export function Dashboard() {
     }
   };
 
+  const handleAssignPlan = async (app: Application, planId: string) => {
+    try {
+      await adminApi.assignPlanToApplication(app.id, planId);
+      success(`Plan asignado a ${app.name}`);
+      await loadDashboardData();
+    } catch (err) {
+      showError('Error al asignar el plan');
+    }
+  };
+
   if (loading || !user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -285,7 +295,6 @@ export function Dashboard() {
           <nav className="p-4 space-y-1">
             {[
               { id: 'dashboard', label: 'Dashboard', icon: Activity },
-              { id: 'tenants', label: 'Clientes', icon: Building2 },
               { id: 'applications', label: 'Aplicaciones', icon: Package },
               { id: 'plans', label: 'Planes', icon: DollarSign },
               { id: 'manual', label: 'Documentación', icon: BookOpen },
@@ -384,20 +393,11 @@ export function Dashboard() {
               </div>
             )}
 
-            {activeView === 'tenants' && (
-              <div className="animate-fade-in">
-                <TenantsView
-                  tenants={tenants}
-                  onAdd={() => setShowCreateTenantModal(true)}
-                  onView={(tenant) => setSelectedTenant(tenant)}
-                />
-              </div>
-            )}
-
             {activeView === 'applications' && (
               <div className="animate-fade-in">
                 <ApplicationsView
                   applications={applications}
+                  plans={plans}
                   onAdd={() => {
                     setSelectedApplication(null);
                     setShowApplicationModal(true);
@@ -411,6 +411,7 @@ export function Dashboard() {
                     setSelectedAppForUsers(app);
                     setShowUsersModal(true);
                   }}
+                  onAssignPlan={handleAssignPlan}
                 />
               </div>
             )}

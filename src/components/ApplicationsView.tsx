@@ -1,17 +1,19 @@
-import { Application } from '../lib/admin-api';
+import { Application, Plan } from '../lib/admin-api';
 import { CompactCard } from './CompactCard';
 import { Button } from './Button';
-import { Plus, Users, Globe, Edit2, Trash2, Key, Eye } from 'lucide-react';
+import { Plus, Users, Globe, Edit2, Trash2, Key, Eye, CreditCard } from 'lucide-react';
 
 interface ApplicationsViewProps {
   applications: Application[];
+  plans: Plan[];
   onAdd: () => void;
   onEdit: (app: Application) => void;
   onDelete: (appId: string) => void;
   onViewUsers: (app: Application) => void;
+  onAssignPlan: (app: Application, planId: string) => void;
 }
 
-export function ApplicationsView({ applications, onAdd, onEdit, onDelete, onViewUsers }: ApplicationsViewProps) {
+export function ApplicationsView({ applications, plans, onAdd, onEdit, onDelete, onViewUsers, onAssignPlan }: ApplicationsViewProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -55,8 +57,49 @@ export function ApplicationsView({ applications, onAdd, onEdit, onDelete, onView
                   className="flex items-center gap-2 text-xs text-blue-600 hover:text-blue-700 hover:underline"
                 >
                   <Users size={14} className="flex-shrink-0" />
-                  <span>{app.users_count || 0} usuarios</span>
+                  <span>
+                    {app.users_count || 0}
+                    {app.max_users ? ` / ${app.max_users}` : ''} usuarios
+                  </span>
                 </button>
+
+                {app.plan_id ? (
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={app.plan_id}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        onAssignPlan(app, e.target.value);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-xs border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      {plans.map(plan => (
+                        <option key={plan.id} value={plan.id}>{plan.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <CreditCard size={14} className="text-gray-400 flex-shrink-0" />
+                    <select
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        if (e.target.value) {
+                          onAssignPlan(app, e.target.value);
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-xs border border-gray-300 rounded px-2 py-1 text-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      defaultValue=""
+                    >
+                      <option value="">Sin plan asignado</option>
+                      {plans.map(plan => (
+                        <option key={plan.id} value={plan.id}>{plan.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 {app.webhook_url && (
                   <div className="flex items-center gap-2 text-xs text-gray-600">
                     <Globe size={14} className="flex-shrink-0" />
