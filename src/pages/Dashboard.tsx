@@ -62,16 +62,21 @@ export function Dashboard() {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
+      console.log('Loading dashboard data...');
       const [statsData, tenantsData, appsData] = await Promise.all([
         adminApi.getStats(),
         adminApi.getTenants(),
         adminApi.getApplications(),
       ]);
+      console.log('Dashboard data loaded:', { statsData, tenantsData, appsData });
       setStats(statsData);
       setTenants(tenantsData);
       setApplications(appsData);
     } catch (error) {
       console.error('Failed to load dashboard:', error);
+      setStats({ tenants_count: 0, active_subscriptions: 0, applications_count: 0, recent_tenants: [] });
+      setTenants([]);
+      setApplications([]);
     } finally {
       setLoading(false);
     }
