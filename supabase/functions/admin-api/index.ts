@@ -35,10 +35,10 @@ Deno.serve(async (req: Request) => {
     );
 
     const url = new URL(req.url);
-    const path = url.pathname.replace("/admin-api", "");
+    const path = url.pathname.replace("/admin-api", "").replace(/^\//, "");
     const method = req.method;
 
-    if (path === "/stats" && method === "GET") {
+    if (path === "stats" && method === "GET") {
       const { data: tenants } = await supabase.from("tenants").select("id");
       const { data: subscriptions } = await supabase
         .from("subscriptions")
@@ -67,7 +67,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (path === "/applications" && method === "GET") {
+    if (path === "applications" && method === "GET") {
       const { data, error } = await supabase
         .from("applications")
         .select("*")
@@ -83,7 +83,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (path === "/applications" && method === "POST") {
+    if (path === "applications" && method === "POST") {
       const body = await req.json();
       const { name, slug, external_app_id, webhook_url, settings } = body;
 
@@ -112,8 +112,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (path.startsWith("/applications/") && method === "PUT") {
-      const appId = path.split("/")[2];
+    if (path.startsWith("applications/") && method === "PUT") {
+      const appId = path.split("/")[1];
       const body = await req.json();
 
       const { data, error } = await supabase
@@ -133,7 +133,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (path === "/tenants" && method === "GET") {
+    if (path === "tenants" && method === "GET") {
       const { data, error } = await supabase
         .from("tenants")
         .select(`
@@ -172,8 +172,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (path.startsWith("/tenants/") && !path.includes("/grant-access") && !path.includes("/revoke-access") && method === "GET") {
-      const tenantId = path.split("/")[2];
+    if (path.startsWith("tenants/") && !path.includes("/grant-access") && !path.includes("/revoke-access") && method === "GET") {
+      const tenantId = path.split("/")[1];
 
       const { data, error } = await supabase
         .from("tenants")
@@ -214,7 +214,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (path === "/tenants" && method === "POST") {
+    if (path === "tenants" && method === "POST") {
       const body = await req.json();
       const { name, organization_name, owner_user_id, owner_email, billing_email, domain, tax_id, metadata } = body;
 
@@ -243,8 +243,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (path.startsWith("/tenants/") && method === "PUT" && !path.includes("/grant-access") && !path.includes("/revoke-access")) {
-      const tenantId = path.split("/")[2];
+    if (path.startsWith("tenants/") && method === "PUT" && !path.includes("/grant-access") && !path.includes("/revoke-access")) {
+      const tenantId = path.split("/")[1];
       const body = await req.json();
 
       const { data, error } = await supabase
@@ -265,7 +265,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (path.includes("/grant-access") && method === "POST") {
-      const tenantId = path.split("/")[2];
+      const tenantId = path.split("/")[1];
       const body = await req.json();
       const { application_id, plan_id, start_trial, notes } = body;
 
@@ -333,8 +333,8 @@ Deno.serve(async (req: Request) => {
 
     if (path.includes("/revoke-access") && method === "PUT") {
       const parts = path.split("/");
-      const tenantId = parts[2];
-      const applicationId = parts[4];
+      const tenantId = parts[1];
+      const applicationId = parts[3];
 
       const { data, error } = await supabase
         .from("tenant_applications")
@@ -362,7 +362,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (path.includes("/subscriptions/") && path.includes("/change-plan") && method === "PUT") {
-      const subscriptionId = path.split("/")[2];
+      const subscriptionId = path.split("/")[1];
       const body = await req.json();
       const { plan_id } = body;
 
@@ -384,7 +384,7 @@ Deno.serve(async (req: Request) => {
     }
 
     if (path.includes("/subscriptions/") && path.includes("/status") && method === "PUT") {
-      const subscriptionId = path.split("/")[2];
+      const subscriptionId = path.split("/")[1];
       const body = await req.json();
       const { status } = body;
 
@@ -405,7 +405,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (path === "/plans" && method === "GET") {
+    if (path === "plans" && method === "GET") {
       const application_id = url.searchParams.get("application_id");
 
       let query = supabase.from("plans").select("*");
@@ -426,7 +426,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (path === "/plans" && method === "POST") {
+    if (path === "plans" && method === "POST") {
       const body = await req.json();
 
       const { data, error } = await supabase
@@ -445,12 +445,12 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (path === "/audit-log" && method === "GET") {
+    if (path === "audit-log" && method === "GET") {
       const limit = parseInt(url.searchParams.get("limit") || "50");
       const offset = parseInt(url.searchParams.get("offset") || "0");
 
       const { data, error } = await supabase
-        .from("audit_log")
+        .from("admin_audit_log")
         .select("*")
         .order("created_at", { ascending: false })
         .range(offset, offset + limit - 1);
