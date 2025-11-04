@@ -140,13 +140,19 @@ export function Dashboard() {
     try {
       setLoading(true);
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-applications`
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-applications`,
+        {
+          headers: {
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+          },
+        }
       );
       const result = await response.json();
 
       if (result.success) {
         alert(`Sincronización completada:\n- Nuevas: ${result.summary.newly_created}\n- Ya existentes: ${result.summary.already_exists}`);
-        loadDashboardData();
+        await loadDashboardData();
       } else {
         alert(`Error en la sincronización: ${result.error}`);
       }
@@ -492,14 +498,16 @@ export function Dashboard() {
                 </div>
                 <div className="flex gap-3">
                   <button
+                    type="button"
                     onClick={handleSyncApplications}
                     disabled={loading}
-                    className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                    className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <RefreshCw className="w-5 h-5" />
-                    Sincronizar
+                    <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+                    {loading ? 'Sincronizando...' : 'Sincronizar'}
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       setSelectedApplication(null);
                       setShowApplicationModal(true);
@@ -522,11 +530,13 @@ export function Dashboard() {
                     Haz clic en "Sincronizar" para cargar las aplicaciones desde el sistema de autenticación, o crea una nueva manualmente.
                   </p>
                   <button
+                    type="button"
                     onClick={handleSyncApplications}
-                    className="mx-auto flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                    disabled={loading}
+                    className="mx-auto flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <RefreshCw className="w-5 h-5" />
-                    Sincronizar Aplicaciones
+                    <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+                    {loading ? 'Sincronizando...' : 'Sincronizar Aplicaciones'}
                   </button>
                 </div>
               ) : (
