@@ -6,13 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
 };
 
-interface WebhookPayload {
-  provider: 'mercadopago' | 'dlocal' | 'stripe';
-  event_type: string;
-  event_id: string;
-  data: any;
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -33,39 +26,10 @@ Deno.serve(async (req: Request) => {
     if (path === '/mercadopago' && req.method === 'POST') {
       const payload = await req.json();
       
-      // Log webhook event
-      const { error: logError } = await supabase
-        .from('webhook_events')
-        .insert({
-          provider: 'mercadopago',
-          event_id: payload.id || crypto.randomUUID(),
-          event_type: payload.type || payload.action,
-          payload: payload,
-          processed: false,
-        });
-
-      if (logError) console.error('Failed to log webhook:', logError);
-
-      // Process different event types
       try {
         await processMercadoPagoEvent(supabase, payload);
-        
-        // Mark as processed
-        await supabase
-          .from('webhook_events')
-          .update({ processed: true, processed_at: new Date().toISOString() })
-          .eq('event_id', payload.id);
-
       } catch (error) {
-        // Log error
-        await supabase
-          .from('webhook_events')
-          .update({ 
-            error: error instanceof Error ? error.message : 'Unknown error',
-            processed_at: new Date().toISOString() 
-          })
-          .eq('event_id', payload.id);
-        
+        console.error('Error processing MercadoPago webhook:', error);
         throw error;
       }
 
@@ -79,38 +43,10 @@ Deno.serve(async (req: Request) => {
     if (path === '/stripe' && req.method === 'POST') {
       const payload = await req.json();
       
-      // Log webhook event
-      const { error: logError } = await supabase
-        .from('webhook_events')
-        .insert({
-          provider: 'stripe',
-          event_id: payload.id || crypto.randomUUID(),
-          event_type: payload.type,
-          payload: payload,
-          processed: false,
-        });
-
-      if (logError) console.error('Failed to log webhook:', logError);
-
       try {
         await processStripeEvent(supabase, payload);
-        
-        // Mark as processed
-        await supabase
-          .from('webhook_events')
-          .update({ processed: true, processed_at: new Date().toISOString() })
-          .eq('event_id', payload.id);
-
       } catch (error) {
-        // Log error
-        await supabase
-          .from('webhook_events')
-          .update({ 
-            error: error instanceof Error ? error.message : 'Unknown error',
-            processed_at: new Date().toISOString() 
-          })
-          .eq('event_id', payload.id);
-        
+        console.error('Error processing Stripe webhook:', error);
         throw error;
       }
 
@@ -124,38 +60,10 @@ Deno.serve(async (req: Request) => {
     if (path === '/dlocal' && req.method === 'POST') {
       const payload = await req.json();
       
-      // Log webhook event
-      const { error: logError } = await supabase
-        .from('webhook_events')
-        .insert({
-          provider: 'dlocal',
-          event_id: payload.id || crypto.randomUUID(),
-          event_type: payload.type || payload.event,
-          payload: payload,
-          processed: false,
-        });
-
-      if (logError) console.error('Failed to log webhook:', logError);
-
       try {
         await processDLocalEvent(supabase, payload);
-        
-        // Mark as processed
-        await supabase
-          .from('webhook_events')
-          .update({ processed: true, processed_at: new Date().toISOString() })
-          .eq('event_id', payload.id);
-
       } catch (error) {
-        // Log error
-        await supabase
-          .from('webhook_events')
-          .update({ 
-            error: error instanceof Error ? error.message : 'Unknown error',
-            processed_at: new Date().toISOString() 
-          })
-          .eq('event_id', payload.id);
-        
+        console.error('Error processing dLocal webhook:', error);
         throw error;
       }
 
@@ -187,70 +95,61 @@ Deno.serve(async (req: Request) => {
   }
 });
 
-// Process Mercado Pago webhook events
 async function processMercadoPagoEvent(supabase: any, payload: any) {
   const eventType = payload.type || payload.action;
   
-  // Handle subscription events
   if (eventType === 'payment.created' || eventType === 'payment.approved') {
-    // Payment approved - activate subscription
-    const preapprovalId = payload.data?.preapproval_id;
+    const paymentId = payload.data?.id;
+    const amount = payload.data?.transaction_amount;
+    const customerId = payload.data?.payer?.id;
     
-    if (preapprovalId) {
-      const { data: subscription } = await supabase
-        .from('subscriptions')
-        .select('*, plan:plans(*)')
-        .eq('provider_subscription_id', preapprovalId)
+    if (paymentId) {
+      const { data: pendingPayment } = await supabase
+        .from('subscription_payments')
+        .select('*, subscription:subscriptions(*)')
+        .eq('provider_transaction_id', paymentId)
+        .eq('status', 'pending')
         .maybeSingle();
 
-      if (subscription) {
-        const now = new Date();
-        const periodEnd = new Date(
-          now.getTime() +
-            (subscription.plan.billing_cycle === 'annual' ? 365 : 30) * 24 * 60 * 60 * 1000
-        );
-
+      if (pendingPayment) {
         await supabase
-          .from('subscriptions')
+          .from('subscription_payments')
           .update({
-            status: 'active',
-            period_start: now.toISOString(),
-            period_end: periodEnd.toISOString(),
+            status: 'completed',
+            paid_at: new Date().toISOString(),
+            provider_customer_id: customerId,
+            metadata: {
+              ...pendingPayment.metadata,
+              webhook_event: eventType,
+              processed_at: new Date().toISOString(),
+            },
           })
-          .eq('id', subscription.id);
-
-        // Create invoice record
-        await supabase
-          .from('invoices')
-          .insert({
-            tenant_id: subscription.tenant_id,
-            subscription_id: subscription.id,
-            amount: subscription.plan.price,
-            currency: subscription.plan.currency,
-            status: 'paid',
-            payment_provider: 'mercadopago',
-            provider_invoice_id: payload.data?.id,
-            issued_at: now.toISOString(),
-            paid_at: now.toISOString(),
-          });
+          .eq('id', pendingPayment.id);
       }
     }
   }
   
   if (eventType === 'payment.failed' || eventType === 'payment.rejected') {
-    // Payment failed - mark as past_due
-    const preapprovalId = payload.data?.preapproval_id;
+    const paymentId = payload.data?.id;
+    const failureReason = payload.data?.status_detail || 'Payment failed';
     
-    if (preapprovalId) {
+    if (paymentId) {
       await supabase
-        .from('subscriptions')
-        .update({ status: 'past_due' })
-        .eq('provider_subscription_id', preapprovalId);
+        .from('subscription_payments')
+        .update({
+          status: 'failed',
+          failed_at: new Date().toISOString(),
+          failure_reason: failureReason,
+          metadata: {
+            webhook_event: eventType,
+            processed_at: new Date().toISOString(),
+          },
+        })
+        .eq('provider_transaction_id', paymentId);
     }
   }
   
   if (eventType === 'preapproval.cancelled' || eventType === 'preapproval.paused') {
-    // Subscription canceled or paused
     const preapprovalId = payload.data?.id;
     
     if (preapprovalId) {
@@ -259,63 +158,93 @@ async function processMercadoPagoEvent(supabase: any, payload: any) {
         .from('subscriptions')
         .update({ 
           status: newStatus,
-          canceled_at: new Date().toISOString()
+          canceled_at: new Date().toISOString(),
+          metadata: {
+            cancellation_reason: 'User action via MercadoPago',
+            webhook_event: eventType,
+          },
         })
         .eq('provider_subscription_id', preapprovalId);
     }
   }
 }
 
-// Process Stripe webhook events
 async function processStripeEvent(supabase: any, payload: any) {
   const eventType = payload.type;
   
   if (eventType === 'invoice.paid') {
     const invoice = payload.data.object;
-    const subscriptionId = invoice.subscription;
+    const stripeSubscriptionId = invoice.subscription;
     
     const { data: subscription } = await supabase
       .from('subscriptions')
       .select('*, plan:plans(*)')
-      .eq('provider_subscription_id', subscriptionId)
+      .eq('provider_subscription_id', stripeSubscriptionId)
       .maybeSingle();
 
     if (subscription) {
       const periodEnd = new Date(invoice.lines.data[0].period.end * 1000);
+      const periodStart = new Date(invoice.lines.data[0].period.start * 1000);
       
-      await supabase
-        .from('subscriptions')
-        .update({
-          status: 'active',
-          period_end: periodEnd.toISOString(),
-        })
-        .eq('id', subscription.id);
-
-      // Create invoice record
-      await supabase
-        .from('invoices')
+      const { data: payment } = await supabase
+        .from('subscription_payments')
         .insert({
-          tenant_id: subscription.tenant_id,
           subscription_id: subscription.id,
+          tenant_id: subscription.tenant_id,
+          plan_id: subscription.plan_id,
           amount: invoice.amount_paid / 100,
           currency: invoice.currency.toUpperCase(),
-          status: 'paid',
+          status: 'completed',
+          payment_method: invoice.payment_method_types?.[0] || 'card',
           payment_provider: 'stripe',
-          provider_invoice_id: invoice.id,
-          issued_at: new Date(invoice.created * 1000).toISOString(),
+          provider_transaction_id: invoice.payment_intent,
+          provider_customer_id: invoice.customer,
+          period_start: periodStart.toISOString(),
+          period_end: periodEnd.toISOString(),
           paid_at: new Date(invoice.status_transitions.paid_at * 1000).toISOString(),
-        });
+          metadata: {
+            invoice_id: invoice.id,
+            webhook_event: eventType,
+          },
+        })
+        .select()
+        .single();
     }
   }
   
   if (eventType === 'invoice.payment_failed') {
     const invoice = payload.data.object;
-    const subscriptionId = invoice.subscription;
+    const stripeSubscriptionId = invoice.subscription;
     
-    await supabase
+    const { data: subscription } = await supabase
       .from('subscriptions')
-      .update({ status: 'past_due' })
-      .eq('provider_subscription_id', subscriptionId);
+      .select('*')
+      .eq('provider_subscription_id', stripeSubscriptionId)
+      .maybeSingle();
+
+    if (subscription) {
+      await supabase
+        .from('subscription_payments')
+        .insert({
+          subscription_id: subscription.id,
+          tenant_id: subscription.tenant_id,
+          plan_id: subscription.plan_id,
+          amount: invoice.amount_due / 100,
+          currency: invoice.currency.toUpperCase(),
+          status: 'failed',
+          payment_provider: 'stripe',
+          provider_transaction_id: invoice.payment_intent,
+          provider_customer_id: invoice.customer,
+          period_start: new Date().toISOString(),
+          period_end: new Date(invoice.lines.data[0].period.end * 1000).toISOString(),
+          failed_at: new Date().toISOString(),
+          failure_reason: invoice.last_finalization_error?.message || 'Payment failed',
+          metadata: {
+            invoice_id: invoice.id,
+            webhook_event: eventType,
+          },
+        });
+    }
   }
   
   if (eventType === 'customer.subscription.deleted') {
@@ -325,20 +254,24 @@ async function processStripeEvent(supabase: any, payload: any) {
       .from('subscriptions')
       .update({ 
         status: 'canceled',
-        canceled_at: new Date().toISOString()
+        canceled_at: new Date(subscription.canceled_at * 1000).toISOString(),
+        metadata: {
+          cancellation_reason: subscription.cancellation_details?.reason || 'User action',
+          webhook_event: eventType,
+        },
       })
       .eq('provider_subscription_id', subscription.id);
   }
 }
 
-// Process dLocal webhook events
 async function processDLocalEvent(supabase: any, payload: any) {
   const eventType = payload.type || payload.event;
   
   if (eventType === 'payment.success' || eventType === 'payment.approved') {
+    const transactionId = payload.id || payload.transaction_id;
     const subscriptionId = payload.subscription_id;
     
-    if (subscriptionId) {
+    if (transactionId && subscriptionId) {
       const { data: subscription } = await supabase
         .from('subscriptions')
         .select('*, plan:plans(*)')
@@ -347,46 +280,70 @@ async function processDLocalEvent(supabase: any, payload: any) {
 
       if (subscription) {
         const now = new Date();
-        const periodEnd = new Date(
-          now.getTime() +
-            (subscription.plan.billing_cycle === 'annual' ? 365 : 30) * 24 * 60 * 60 * 1000
-        );
+        let periodEnd: Date;
+        
+        if (subscription.plan.billing_cycle === 'monthly') {
+          periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+        } else {
+          periodEnd = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+        }
 
         await supabase
-          .from('subscriptions')
-          .update({
-            status: 'active',
+          .from('subscription_payments')
+          .insert({
+            subscription_id: subscription.id,
+            tenant_id: subscription.tenant_id,
+            plan_id: subscription.plan_id,
+            amount: payload.amount,
+            currency: payload.currency || 'USD',
+            status: 'completed',
+            payment_method: payload.payment_method,
+            payment_provider: 'dlocal',
+            provider_transaction_id: transactionId,
+            provider_customer_id: payload.payer?.id,
             period_start: now.toISOString(),
             period_end: periodEnd.toISOString(),
-          })
-          .eq('id', subscription.id);
-
-        // Create invoice record
-        await supabase
-          .from('invoices')
-          .insert({
-            tenant_id: subscription.tenant_id,
-            subscription_id: subscription.id,
-            amount: payload.amount,
-            currency: payload.currency,
-            status: 'paid',
-            payment_provider: 'dlocal',
-            provider_invoice_id: payload.id,
-            issued_at: now.toISOString(),
             paid_at: now.toISOString(),
+            metadata: {
+              webhook_event: eventType,
+            },
           });
       }
     }
   }
   
   if (eventType === 'payment.failed' || eventType === 'payment.rejected') {
+    const transactionId = payload.id || payload.transaction_id;
     const subscriptionId = payload.subscription_id;
     
-    if (subscriptionId) {
-      await supabase
+    if (transactionId && subscriptionId) {
+      const { data: subscription } = await supabase
         .from('subscriptions')
-        .update({ status: 'past_due' })
-        .eq('provider_subscription_id', subscriptionId);
+        .select('*')
+        .eq('provider_subscription_id', subscriptionId)
+        .maybeSingle();
+
+      if (subscription) {
+        await supabase
+          .from('subscription_payments')
+          .insert({
+            subscription_id: subscription.id,
+            tenant_id: subscription.tenant_id,
+            plan_id: subscription.plan_id,
+            amount: payload.amount,
+            currency: payload.currency || 'USD',
+            status: 'failed',
+            payment_provider: 'dlocal',
+            provider_transaction_id: transactionId,
+            period_start: new Date().toISOString(),
+            period_end: new Date().toISOString(),
+            failed_at: new Date().toISOString(),
+            failure_reason: payload.status_detail || 'Payment failed',
+            metadata: {
+              webhook_event: eventType,
+            },
+          });
+      }
     }
   }
   
@@ -398,7 +355,11 @@ async function processDLocalEvent(supabase: any, payload: any) {
         .from('subscriptions')
         .update({ 
           status: 'canceled',
-          canceled_at: new Date().toISOString()
+          canceled_at: new Date().toISOString(),
+          metadata: {
+            cancellation_reason: 'User action via dLocal',
+            webhook_event: eventType,
+          },
         })
         .eq('provider_subscription_id', subscriptionId);
     }
