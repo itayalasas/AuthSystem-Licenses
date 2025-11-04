@@ -39,6 +39,31 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const url = new URL(req.url);
+    const cronSecret = url.searchParams.get("secret");
+    const authHeader = req.headers.get("Authorization");
+
+    const expectedCronSecret = Deno.env.get("CRON_SECRET") || "default_cron_secret_change_me";
+    const validCronAuth = cronSecret && cronSecret === expectedCronSecret;
+    const validBearerAuth = authHeader?.startsWith("Bearer ");
+
+    if (!validCronAuth && !validBearerAuth) {
+      console.warn("Unauthorized sync attempt");
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Unauthorized - provide valid authentication",
+        }),
+        {
+          status: 401,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);

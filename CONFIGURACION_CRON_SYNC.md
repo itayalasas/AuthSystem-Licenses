@@ -14,7 +14,17 @@ https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications
 
 **Método:** `GET` o `POST`
 
-**Autenticación:** No requiere autenticación (la función usa credenciales internas)
+**Autenticación:** Requiere una de las siguientes opciones:
+
+### Opción 1: Secret en Query Parameter (Recomendado para CRON)
+```
+https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications?secret=TU_SECRET_AQUI
+```
+
+### Opción 2: Bearer Token en Header (Para uso desde el Dashboard)
+```
+Authorization: Bearer TU_SUPABASE_ANON_KEY
+```
 
 ---
 
@@ -72,8 +82,16 @@ https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications
 - **Title:** `Sync Applications from Auth System`
 - **Address (URL):**
   ```
-  https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications
+  https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications?secret=MI_SECRET_SEGURO_123
   ```
+
+  ⚠️ **IMPORTANTE:** Reemplaza `MI_SECRET_SEGURO_123` con un secret seguro único.
+
+  Puedes generar un secret seguro con este comando:
+  ```bash
+  openssl rand -hex 32
+  ```
+
 - **Request method:** `GET`
 
 #### **Configuración de Ejecución**
@@ -120,24 +138,43 @@ Patrón cron: `*/30 * * * *`
 
 ## 🧪 Probar la Sincronización Manualmente
 
-### Usando cURL
+### Opción 1: Usando cURL con Secret
 
 ```bash
-curl -X GET https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications
+curl -X GET "https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications?secret=MI_SECRET_SEGURO_123"
+```
+
+### Opción 2: Usando cURL con Bearer Token
+
+```bash
+curl -X GET https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications \
+  -H "Authorization: Bearer TU_SUPABASE_ANON_KEY"
 ```
 
 ### Usando el Navegador
 
-Simplemente abre esta URL en tu navegador:
+Simplemente abre esta URL en tu navegador (con el secret):
 ```
-https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications
+https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications?secret=MI_SECRET_SEGURO_123
 ```
 
 ### Usando Postman
 
+#### Con Secret en Query Param:
 1. Método: `GET`
 2. URL: `https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications`
-3. Click en "Send"
+3. En "Params" agrega:
+   - Key: `secret`
+   - Value: `MI_SECRET_SEGURO_123`
+4. Click en "Send"
+
+#### Con Bearer Token:
+1. Método: `GET`
+2. URL: `https://yamuegahohdfyfxwobrk.supabase.co/functions/v1/sync-applications`
+3. En "Headers" agrega:
+   - Key: `Authorization`
+   - Value: `Bearer TU_SUPABASE_ANON_KEY`
+4. Click en "Send"
 
 ---
 
@@ -220,11 +257,31 @@ ORDER BY created_at DESC;
 - Si tienes miles de apps, considera paginar la sincronización
 
 ### Seguridad
-- La API **NO requiere autenticación externa** (usa credenciales de Supabase internas)
-- Sin embargo, solo puede **crear** aplicaciones, no modificar o eliminar
+- La API **requiere autenticación** mediante secret o Bearer token
+- El secret del CRON debe ser **único y seguro**
+- Guarda el secret de forma segura, NO lo expongas públicamente
+- La función solo puede **crear** aplicaciones, no modificar o eliminar
 - Las API Keys generadas son únicas y seguras
 
+#### Configurar el CRON_SECRET en Supabase (Opcional)
+
+Por defecto, la función acepta cualquier secret. Para mayor seguridad, configura una variable de entorno:
+
+1. Ve a tu proyecto en Supabase Dashboard
+2. Settings → Edge Functions → Environment Variables
+3. Agrega:
+   - **Name:** `CRON_SECRET`
+   - **Value:** `tu-secret-super-seguro-generado`
+4. Guarda los cambios
+
+Si no configuras `CRON_SECRET`, la función usa un valor por defecto (menos seguro).
+
 ### Errores Comunes
+
+#### Error 401: "Unauthorized - provide valid authentication"
+- No se proporcionó el secret o el Bearer token
+- El secret proporcionado es incorrecto
+- **Solución:** Verifica que estés usando `?secret=TU_SECRET` en la URL o el header `Authorization: Bearer TOKEN`
 
 #### Error: "External API returned status 500"
 - El sistema de autenticación externo no está disponible
