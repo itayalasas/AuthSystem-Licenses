@@ -18,6 +18,7 @@ import {
   DollarSign,
   RefreshCw,
   Shield,
+  CreditCard,
 } from 'lucide-react';
 import { ToastContainer } from '../components/Toast';
 import { useToast } from '../hooks/useToast';
@@ -30,6 +31,7 @@ import { ApplicationModal } from '../components/ApplicationModal';
 import { PlanModal } from '../components/PlanModal';
 import { ApplicationUsersModal } from '../components/ApplicationUsersModal';
 import { PlanCard } from '../components/PlanCard';
+import { PendingPaymentsView } from '../components/PendingPaymentsView';
 
 export function Dashboard() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -40,7 +42,7 @@ export function Dashboard() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [activeView, setActiveView] = useState<'dashboard' | 'applications' | 'plans' | 'manual'>(
+  const [activeView, setActiveView] = useState<'dashboard' | 'applications' | 'plans' | 'payments' | 'manual'>(
     'dashboard'
   );
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
@@ -322,6 +324,7 @@ export function Dashboard() {
               { id: 'dashboard', label: 'Dashboard', icon: Activity },
               { id: 'applications', label: 'Aplicaciones', icon: Package },
               { id: 'plans', label: 'Planes', icon: DollarSign },
+              { id: 'payments', label: 'Pagos', icon: CreditCard },
               { id: 'manual', label: 'Documentación', icon: BookOpen },
             ].map(({ id, label, icon: Icon }) => (
               <button
@@ -474,6 +477,12 @@ export function Dashboard() {
                     />
                   ))}
                 </div>
+              </div>
+            )}
+
+            {activeView === 'payments' && (
+              <div className="animate-fade-in">
+                <PendingPaymentsView />
               </div>
             )}
 
