@@ -345,6 +345,18 @@ class AdminAPIService {
     return result.data;
   }
 
+  async deleteApplication(applicationId: string): Promise<void> {
+    const response = await fetch(`${getAdminApiUrl()}/applications/${applicationId}`, {
+      method: 'DELETE',
+      headers: this.headers,
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to delete application');
+    }
+  }
+
   async updateTenant(tenantId: string, data: {
     name?: string;
     organization_name?: string;

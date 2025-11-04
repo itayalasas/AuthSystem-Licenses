@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { X, Copy, Check } from 'lucide-react';
+import { X, Copy, Check, Trash2 } from 'lucide-react';
 import { type Application } from '../lib/admin-api';
 
 interface ApplicationModalProps {
   application?: Application;
   onClose: () => void;
   onSave: (data: any) => Promise<void>;
+  onDelete?: (applicationId: string) => Promise<void>;
 }
 
-export function ApplicationModal({ application, onClose, onSave }: ApplicationModalProps) {
+export function ApplicationModal({ application, onClose, onSave, onDelete }: ApplicationModalProps) {
   const [formData, setFormData] = useState({
     name: application?.name || '',
     slug: application?.slug || '',
@@ -16,6 +17,7 @@ export function ApplicationModal({ application, onClose, onSave }: ApplicationMo
     webhook_url: application?.webhook_url || '',
   });
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [copiedApiKey, setCopiedApiKey] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,6 +38,25 @@ export function ApplicationModal({ application, onClose, onSave }: ApplicationMo
     navigator.clipboard.writeText(text);
     setCopiedApiKey(true);
     setTimeout(() => setCopiedApiKey(false), 2000);
+  };
+
+  const handleDelete = async () => {
+    if (!application || !onDelete) return;
+
+    if (!confirm(`¿Estás seguro de eliminar "${application.name}"? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      await onDelete(application.id);
+      onClose();
+    } catch (error) {
+      console.error('Failed to delete application:', error);
+      alert('Error al eliminar la aplicación');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -143,15 +164,27 @@ export function ApplicationModal({ application, onClose, onSave }: ApplicationMo
           <div className="flex gap-3 pt-4">
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || deleting}
               className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
             >
               {saving ? 'Guardando...' : (application ? 'Guardar Cambios' : 'Crear Aplicación')}
             </button>
+            {application && onDelete && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={saving || deleting}
+                className="px-6 border border-red-300 text-red-600 py-3 rounded-lg font-medium hover:bg-red-50 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                {deleting ? 'Eliminando...' : 'Eliminar'}
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}
-              className="px-6 border border-gray-300 py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+              disabled={saving || deleting}
+              className="px-6 border border-gray-300 py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
               Cancelar
             </button>

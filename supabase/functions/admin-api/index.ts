@@ -465,6 +465,27 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // DELETE /applications/:id - Delete application
+    if (path.match(/^\/applications\/[0-9a-f-]+$/) && req.method === "DELETE") {
+      const applicationId = path.split("/")[2];
+
+      const { error: deleteError } = await supabase
+        .from("applications")
+        .delete()
+        .eq("id", applicationId);
+
+      if (deleteError) throw deleteError;
+
+      await logAudit("delete", "application", applicationId, {});
+
+      return new Response(
+        JSON.stringify({ success: true, message: "Application deleted successfully" }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     return new Response(
       JSON.stringify({ success: false, error: "Not found" }),
       {

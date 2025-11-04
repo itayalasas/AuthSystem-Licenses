@@ -23,6 +23,7 @@ import {
   BookOpen,
   DollarSign,
   Edit2,
+  RefreshCw,
 } from 'lucide-react';
 import { TenantDetailModal } from '../components/TenantDetailModal';
 import { ApplicationModal } from '../components/ApplicationModal';
@@ -127,6 +128,33 @@ export function Dashboard() {
     if (selectedApplication) {
       await adminApi.updateApplication(selectedApplication.id, data);
       loadDashboardData();
+    }
+  };
+
+  const handleDeleteApplication = async (applicationId: string) => {
+    await adminApi.deleteApplication(applicationId);
+    loadDashboardData();
+  };
+
+  const handleSyncApplications = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-applications`
+      );
+      const result = await response.json();
+
+      if (result.success) {
+        alert(`Sincronización completada:\n- Nuevas: ${result.summary.newly_created}\n- Ya existentes: ${result.summary.already_exists}`);
+        loadDashboardData();
+      } else {
+        alert(`Error en la sincronización: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to sync applications:', error);
+      alert('Error al sincronizar aplicaciones');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -462,24 +490,52 @@ export function Dashboard() {
                   <h2 className="text-3xl font-bold text-gray-900 mb-2">Aplicaciones</h2>
                   <p className="text-gray-600">Gestiona aplicaciones registradas</p>
                 </div>
-                <button
-                  onClick={() => {
-                    setSelectedApplication(null);
-                    setShowApplicationModal(true);
-                  }}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-                >
-                  <Plus className="w-5 h-5" />
-                  Nueva Aplicación
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleSyncApplications}
+                    disabled={loading}
+                    className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw className="w-5 h-5" />
+                    Sincronizar
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedApplication(null);
+                      setShowApplicationModal(true);
+                    }}
+                    className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Nueva Aplicación
+                  </button>
+                </div>
               </div>
 
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {applications.map((app) => (
-                  <div
-                    key={app.id}
-                    className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow"
+              {applications.length === 0 ? (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-8 text-center">
+                  <Package className="w-16 h-16 text-blue-600 mx-auto mb-4" />
+                  <h3 className="text-xl font-bold text-blue-900 mb-2">
+                    No hay aplicaciones registradas
+                  </h3>
+                  <p className="text-blue-800 mb-4">
+                    Haz clic en "Sincronizar" para cargar las aplicaciones desde el sistema de autenticación, o crea una nueva manualmente.
+                  </p>
+                  <button
+                    onClick={handleSyncApplications}
+                    className="mx-auto flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
                   >
+                    <RefreshCw className="w-5 h-5" />
+                    Sincronizar Aplicaciones
+                  </button>
+                </div>
+              ) : (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {applications.map((app) => (
+                    <div
+                      key={app.id}
+                      className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow"
+                    >
                     <div className="flex items-start justify-between mb-4">
                       <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
                         <Package className="w-6 h-6 text-white" />
@@ -520,9 +576,10 @@ export function Dashboard() {
                       <Settings className="w-4 h-4" />
                       Configurar
                     </button>
-                  </div>
-                ))}
-              </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -989,6 +1046,7 @@ export function Dashboard() {
             setSelectedApplication(null);
           }}
           onSave={selectedApplication ? handleUpdateApplication : handleCreateApplication}
+          onDelete={selectedApplication ? handleDeleteApplication : undefined}
         />
       )}
 
