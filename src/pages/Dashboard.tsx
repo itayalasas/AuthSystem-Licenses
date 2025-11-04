@@ -5,6 +5,7 @@ import {
   type Tenant,
   type Application,
   type DashboardStats,
+  type Plan,
 } from '../lib/admin-api';
 import {
   Users,
@@ -20,9 +21,12 @@ import {
   LogOut,
   User,
   BookOpen,
+  DollarSign,
+  Edit2,
 } from 'lucide-react';
 import { TenantDetailModal } from '../components/TenantDetailModal';
 import { ApplicationModal } from '../components/ApplicationModal';
+import { PlanModal } from '../components/PlanModal';
 
 export function Dashboard() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -30,8 +34,9 @@ export function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [applications, setApplications] = useState<Application[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeView, setActiveView] = useState<'dashboard' | 'tenants' | 'applications' | 'manual'>(
+  const [activeView, setActiveView] = useState<'dashboard' | 'tenants' | 'applications' | 'plans' | 'manual'>(
     'dashboard'
   );
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
@@ -39,6 +44,8 @@ export function Dashboard() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
 
   useEffect(() => {
     const currentUser = AuthService.getUser();
@@ -63,20 +70,23 @@ export function Dashboard() {
     try {
       setLoading(true);
       console.log('Loading dashboard data...');
-      const [statsData, tenantsData, appsData] = await Promise.all([
+      const [statsData, tenantsData, appsData, plansData] = await Promise.all([
         adminApi.getStats(),
         adminApi.getTenants(),
         adminApi.getApplications(),
+        adminApi.getPlans(),
       ]);
-      console.log('Dashboard data loaded:', { statsData, tenantsData, appsData });
+      console.log('Dashboard data loaded:', { statsData, tenantsData, appsData, plansData });
       setStats(statsData);
       setTenants(tenantsData);
       setApplications(appsData);
+      setPlans(plansData);
     } catch (error) {
       console.error('Failed to load dashboard:', error);
       setStats({ tenants_count: 0, active_subscriptions: 0, applications_count: 0, recent_tenants: [] });
       setTenants([]);
       setApplications([]);
+      setPlans([]);
     } finally {
       setLoading(false);
     }
@@ -118,6 +128,11 @@ export function Dashboard() {
       await adminApi.updateApplication(selectedApplication.id, data);
       loadDashboardData();
     }
+  };
+
+  const handleCreatePlan = async (data: any) => {
+    await adminApi.createPlan(data);
+    loadDashboardData();
   };
 
   if (loading || !user) {
@@ -182,6 +197,18 @@ export function Dashboard() {
             >
               <Package className="w-5 h-5" />
               <span className="font-medium">Aplicaciones</span>
+            </button>
+
+            <button
+              onClick={() => setActiveView('plans')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg mb-2 transition-colors ${
+                activeView === 'plans'
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <DollarSign className="w-5 h-5" />
+              <span className="font-medium">Planes</span>
             </button>
 
             <button
@@ -499,6 +526,166 @@ export function Dashboard() {
             </div>
           )}
 
+          {activeView === 'plans' && (
+            <div className="p-8">
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h2 className="text-3xl font-bold text-gray-900 mb-2">Planes</h2>
+                  <p className="text-gray-600">Gestiona planes de suscripción para tus aplicaciones</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedPlan(null);
+                    setShowPlanModal(true);
+                  }}
+                  className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                >
+                  <Plus className="w-5 h-5" />
+                  Crear Plan
+                </button>
+              </div>
+
+              {applications.length === 0 ? (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center">
+                  <h3 className="text-lg font-bold text-yellow-900 mb-2">
+                    No hay aplicaciones registradas
+                  </h3>
+                  <p className="text-yellow-800 mb-4">
+                    Debes crear al menos una aplicación antes de poder crear planes.
+                  </p>
+                  <button
+                    onClick={() => setActiveView('applications')}
+                    className="bg-yellow-600 text-white px-6 py-2 rounded-lg hover:bg-yellow-700 transition-colors"
+                  >
+                    Ir a Aplicaciones
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {applications.map((app) => {
+                    const appPlans = plans.filter((p) => p.application_id === app.id);
+
+                    return (
+                      <div key={app.id} className="bg-white rounded-xl shadow-sm border border-gray-100">
+                        <div className="p-6 border-b border-gray-100">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                                <Package className="w-6 h-6 text-white" />
+                              </div>
+                              <div>
+                                <h3 className="text-lg font-bold text-gray-900">{app.name}</h3>
+                                <p className="text-sm text-gray-500">{appPlans.length} planes</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="p-6">
+                          {appPlans.length === 0 ? (
+                            <p className="text-gray-500 text-center py-8">
+                              No hay planes para esta aplicación
+                            </p>
+                          ) : (
+                            <div className="grid md:grid-cols-3 gap-4">
+                              {appPlans.map((plan) => (
+                                <div
+                                  key={plan.id}
+                                  className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow"
+                                >
+                                  <div className="mb-4">
+                                    <h4 className="text-lg font-bold text-gray-900 mb-1">
+                                      {plan.name}
+                                    </h4>
+                                    {plan.description && (
+                                      <p className="text-sm text-gray-600">{plan.description}</p>
+                                    )}
+                                  </div>
+
+                                  <div className="mb-4">
+                                    <div className="flex items-baseline gap-1">
+                                      <span className="text-3xl font-bold text-gray-900">
+                                        {plan.price}
+                                      </span>
+                                      <span className="text-gray-600">{plan.currency}</span>
+                                      <span className="text-gray-500">
+                                        /{plan.billing_cycle === 'monthly' ? 'mes' : 'año'}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-2 mb-4">
+                                    <div className="flex items-center justify-between text-sm">
+                                      <span className="text-gray-600">Usuarios:</span>
+                                      <span className="font-medium text-gray-900">
+                                        {plan.entitlements?.max_users || 0}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-sm">
+                                      <span className="text-gray-600">Almacenamiento:</span>
+                                      <span className="font-medium text-gray-900">
+                                        {plan.entitlements?.max_storage_gb || 0} GB
+                                      </span>
+                                    </div>
+                                    {plan.trial_days > 0 && (
+                                      <div className="flex items-center justify-between text-sm">
+                                        <span className="text-gray-600">Prueba:</span>
+                                        <span className="font-medium text-green-600">
+                                          {plan.trial_days} días
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {plan.entitlements?.features &&
+                                    Object.keys(plan.entitlements.features).length > 0 && (
+                                      <div className="border-t border-gray-100 pt-4 mb-4">
+                                        <p className="text-xs font-medium text-gray-600 mb-2">
+                                          FUNCIONALIDADES:
+                                        </p>
+                                        <div className="space-y-1">
+                                          {Object.entries(plan.entitlements.features).map(
+                                            ([key, value]) => (
+                                              <div
+                                                key={key}
+                                                className="flex items-center gap-2 text-sm"
+                                              >
+                                                <div
+                                                  className={`w-2 h-2 rounded-full ${
+                                                    value ? 'bg-green-500' : 'bg-gray-300'
+                                                  }`}
+                                                />
+                                                <span className="text-gray-700">{key}</span>
+                                              </div>
+                                            )
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                  <button
+                                    onClick={() => {
+                                      setSelectedPlan(plan);
+                                      setShowPlanModal(true);
+                                    }}
+                                    className="w-full bg-gray-50 hover:bg-gray-100 text-gray-700 py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2"
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                    Editar
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeView === 'manual' && (
             <div className="p-8">
               <div className="mb-8">
@@ -802,6 +989,18 @@ export function Dashboard() {
             setSelectedApplication(null);
           }}
           onSave={selectedApplication ? handleUpdateApplication : handleCreateApplication}
+        />
+      )}
+
+      {showPlanModal && (
+        <PlanModal
+          plan={selectedPlan || undefined}
+          applications={applications}
+          onClose={() => {
+            setShowPlanModal(false);
+            setSelectedPlan(null);
+          }}
+          onSave={handleCreatePlan}
         />
       )}
     </div>
