@@ -156,38 +156,30 @@ Deno.serve(async (req: Request) => {
         reason = `Subscription status: ${subscription.status}`;
       }
 
-      // Generate short-lived license token
-      let licenseToken = null;
+      // Get existing license
+      let licenseData = null;
       let enrichedEntitlements = null;
 
       if (isValid && subscription && subscription.plan) {
         enrichedEntitlements = await enrichEntitlements(supabase, subscription.plan.entitlements);
 
-        const now = new Date();
-        const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
-        const jti = crypto.randomUUID();
-
+        // Query for existing license
         const { data: license } = await supabase
           .from('licenses')
-          .insert({
-            tenant_id: tenant.id,
-            subscription_id: subscription.id,
-            jti,
-            type: subscription.status === 'trialing' ? 'trial' : 'paid',
-            status: 'active',
-            issued_at: now.toISOString(),
-            expires_at: expiresAt.toISOString(),
-            entitlements: subscription.plan.entitlements,
-          })
-          .select()
-          .single();
+          .select('*')
+          .eq('tenant_id', tenant.id)
+          .eq('application_id', application.id)
+          .eq('status', 'active')
+          .maybeSingle();
 
         if (license) {
-          licenseToken = {
-            jti: license.jti,
+          licenseData = {
+            license_key: license.license_key,
             tenant_id: license.tenant_id,
+            application_id: license.application_id,
+            plan_id: license.plan_id,
+            status: license.status,
             expires_at: license.expires_at,
-            entitlements: enrichedEntitlements,
           };
         }
       }
@@ -216,7 +208,7 @@ Deno.serve(async (req: Request) => {
             period_end: subscription.period_end,
             entitlements: enrichedEntitlements,
           } : null,
-          license: licenseToken,
+          license: licenseData,
           reason: isValid ? undefined : reason,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
