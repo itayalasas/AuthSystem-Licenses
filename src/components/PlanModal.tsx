@@ -30,7 +30,7 @@ export function PlanModal({ plan, applications, onClose, onCreate, onUpdate, adm
     price: plan?.price || 0,
     currency: plan?.currency || 'USD',
     billing_cycle: plan?.billing_cycle || 'monthly',
-    trial_days: plan?.trial_days || 0,
+    trial_days: plan?.trial_days || 14,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {

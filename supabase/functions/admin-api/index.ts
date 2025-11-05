@@ -332,6 +332,16 @@ Deno.serve(async (req: Request) => {
     if (path === "plans" && method === "POST") {
       const body = await req.json();
 
+      if (!body.application_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: "application_id is required" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
       const { data: plan, error } = await supabase
         .from("plans")
         .insert(body)
