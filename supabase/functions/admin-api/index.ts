@@ -491,19 +491,6 @@ Deno.serve(async (req: Request) => {
 
       if (error) throw error;
 
-      // Auto-assign plan to application
-      if (plan && body.application_id) {
-        const maxUsers = plan.entitlements?.features?.max_users || 0;
-
-        await supabase
-          .from("applications")
-          .update({
-            plan_id: plan.id,
-            max_users: maxUsers
-          })
-          .eq("id", body.application_id);
-      }
-
       return new Response(
         JSON.stringify({ success: true, data: plan }),
         {
