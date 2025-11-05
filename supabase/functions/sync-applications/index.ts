@@ -84,13 +84,17 @@ Deno.serve(async (req: Request) => {
     const externalApiUrl = "https://auth-systemv1.netlify.app/api/application/info";
     const externalApiKey = Deno.env.get("EXTERNAL_AUTH_API_KEY");
 
+    if (!externalApiKey) {
+      console.error("EXTERNAL_AUTH_API_KEY not configured in environment variables");
+      throw new Error("EXTERNAL_AUTH_API_KEY environment variable is required but not set");
+    }
+
+    console.log("External API Key found, length:", externalApiKey.length);
+
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      "X-API-Key": externalApiKey,
     };
-
-    if (externalApiKey) {
-      headers["X-API-Key"] = externalApiKey;
-    }
 
     const response = await fetch(externalApiUrl, {
       method: "GET",
