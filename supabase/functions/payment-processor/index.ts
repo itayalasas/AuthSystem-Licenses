@@ -43,6 +43,125 @@ Deno.serve(async (req: Request) => {
     const url = new URL(req.url);
     const path = url.pathname.replace('/payment-processor', '');
 
+    // GET /subscription/by-user - Get subscription by external_app_id and user_id
+    if (path === '/subscription/by-user' && req.method === 'GET') {
+      const external_app_id = url.searchParams.get('external_app_id');
+      const user_id = url.searchParams.get('user_id');
+      const user_email = url.searchParams.get('user_email');
+
+      if (!external_app_id || (!user_id && !user_email)) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'external_app_id and (user_id or user_email) are required' }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      const { data: application } = await supabase
+        .from('applications')
+        .select('id')
+        .eq('external_app_id', external_app_id)
+        .maybeSingle();
+
+      if (!application) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Application not found' }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      let tenantQuery = supabase
+        .from('tenants')
+        .select('id');
+
+      if (user_id) {
+        tenantQuery = tenantQuery.eq('owner_user_id', user_id);
+      } else {
+        tenantQuery = tenantQuery.eq('owner_email', user_email);
+      }
+
+      const { data: tenant } = await tenantQuery.maybeSingle();
+
+      if (!tenant) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Tenant not found for this user' }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      const { data: subscription, error } = await supabase
+        .from('subscriptions')
+        .select(`
+          *,
+          plan:plans(*),
+          tenant:tenants(name, owner_email, billing_email)
+        `)
+        .eq('tenant_id', tenant.id)
+        .eq('application_id', application.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error || !subscription) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Subscription not found' }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      const now = new Date();
+      const trialEnd = subscription.trial_end ? new Date(subscription.trial_end) : null;
+      const periodEnd = subscription.current_period_end ? new Date(subscription.current_period_end) : null;
+
+      const isInTrial = subscription.status === 'trialing' && trialEnd && now < trialEnd;
+      const trialDaysRemaining = trialEnd ? Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+      const needsPayment = subscription.status === 'past_due' || (subscription.status === 'trialing' && trialEnd && now >= trialEnd);
+      const daysUntilExpiry = periodEnd ? Math.ceil((periodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+
+      const { data: payments } = await supabase
+        .from('subscription_payments')
+        .select('*')
+        .eq('subscription_id', subscription.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      const lastPayment = payments && payments.length > 0 ? payments[0] : null;
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            subscription_id: subscription.id,
+            status: subscription.status,
+            is_in_trial: isInTrial,
+            trial_days_remaining: trialDaysRemaining,
+            trial_end_date: subscription.trial_end,
+            needs_payment: needsPayment,
+            days_until_expiry: daysUntilExpiry,
+            current_period_end: subscription.current_period_end,
+            plan: subscription.plan,
+            tenant: subscription.tenant,
+            last_payment: lastPayment,
+            recent_payments: payments || [],
+          },
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     // GET /subscription/:subscription_id/status - Check subscription and trial status
     if (path.match(/^\/subscription\/[^/]+\/status$/) && req.method === 'GET') {
       const subscriptionId = path.split('/')[2];

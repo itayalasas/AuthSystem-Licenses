@@ -39,6 +39,123 @@ Deno.serve(async (req: Request) => {
     const url = new URL(req.url);
     const path = url.pathname.replace('/payment-manager', '');
 
+    // POST /payments/by-user - Create payment using external_app_id and user_id
+    if (path === '/payments/by-user' && req.method === 'POST') {
+      const { external_app_id, user_id, user_email, payment_provider, payment_method, metadata } = await req.json();
+
+      if (!external_app_id || (!user_id && !user_email)) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'external_app_id and (user_id or user_email) are required' }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      const { data: application } = await supabase
+        .from('applications')
+        .select('id')
+        .eq('external_app_id', external_app_id)
+        .maybeSingle();
+
+      if (!application) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Application not found' }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      let tenantQuery = supabase.from('tenants').select('id');
+      if (user_id) {
+        tenantQuery = tenantQuery.eq('owner_user_id', user_id);
+      } else {
+        tenantQuery = tenantQuery.eq('owner_email', user_email);
+      }
+
+      const { data: tenant } = await tenantQuery.maybeSingle();
+
+      if (!tenant) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Tenant not found for this user' }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      const { data: subscription, error: subError } = await supabase
+        .from('subscriptions')
+        .select('*, plan:plans(*), tenant:tenants(*)')
+        .eq('tenant_id', tenant.id)
+        .eq('application_id', application.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (subError || !subscription) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Subscription not found' }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      const now = new Date();
+      let periodEnd: Date;
+
+      if (subscription.plan.billing_cycle === 'monthly') {
+        periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      } else if (subscription.plan.billing_cycle === 'annual') {
+        periodEnd = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+      } else {
+        periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      }
+
+      const { data: payment, error: paymentError } = await supabase
+        .from('subscription_payments')
+        .insert({
+          subscription_id: subscription.id,
+          tenant_id: subscription.tenant_id,
+          plan_id: subscription.plan_id,
+          amount: subscription.plan.price,
+          currency: subscription.plan.currency || 'USD',
+          status: 'pending',
+          payment_method: payment_method,
+          payment_provider: payment_provider || 'manual',
+          period_start: now.toISOString(),
+          period_end: periodEnd.toISOString(),
+          metadata: metadata || {},
+        })
+        .select()
+        .single();
+
+      if (paymentError) throw paymentError;
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: payment,
+          subscription: {
+            id: subscription.id,
+            plan: subscription.plan.name,
+            amount: subscription.plan.price,
+            currency: subscription.plan.currency
+          }
+        }),
+        {
+          status: 201,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     // POST /payments - Create a new payment
     if (path === '/payments' && req.method === 'POST') {
       const payload: PaymentPayload = await req.json();
