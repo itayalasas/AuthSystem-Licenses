@@ -236,93 +236,88 @@ Deno.serve(async (req: Request) => {
 
       console.log(`Synced ${extApp.users.length} users for ${extApp.name}`);
 
-      // Create ONE tenant per application (the application IS the tenant)
-      // Get the first user as the owner (or use app info if no users)
-      const ownerUser = extApp.users && extApp.users.length > 0 ? extApp.users[0] : null;
-
-      // Check if tenant already exists for this application
-      const { data: existingTenant } = await supabase
-        .from("tenants")
-        .select("id")
-        .eq("external_app_id", extApp.application_id)
-        .maybeSingle();
-
-      let tenantId = existingTenant?.id;
-
-      // Create tenant if doesn't exist (ONE per application)
-      if (!existingTenant) {
-        const { data: newTenant, error: tenantError } = await supabase
+      // Create individual tenants for each user
+      for (const user of extApp.users) {
+        // Check if tenant already exists for this user
+        const { data: existingUserTenant } = await supabase
           .from("tenants")
-          .insert({
-            name: extApp.name,
-            organization_name: extApp.name,
-            owner_user_id: ownerUser?.id || extApp.id,
-            owner_email: ownerUser?.email || "noreply@system.local",
-            external_app_id: extApp.application_id,
-            metadata: {
-              auto_created: true,
-              is_application_tenant: true,
-              total_users: extApp.users?.length || 0,
-              created_from_sync: true,
-            },
-          })
-          .select()
-          .single();
+          .select("id")
+          .eq("owner_user_id", user.id)
+          .maybeSingle();
 
-        if (tenantError) {
-          console.error(`Failed to create tenant for application ${extApp.name}:`, tenantError);
-          results.errors.push(
-            `Failed to create tenant for ${extApp.name}: ${tenantError.message}`
-          );
-          continue;
+        let userTenantId = existingUserTenant?.id;
+
+        // Create tenant if doesn't exist
+        if (!existingUserTenant) {
+          // Validate email before creating tenant
+          if (!user.email || user.email.trim() === '') {
+            console.error(`Skipping tenant creation for user ${user.id}: missing email`);
+            results.errors.push(
+              `Failed to sync user ${user.name || user.id}: missing email address`
+            );
+            continue;
+          }
+
+          const { data: newUserTenant, error: userTenantError } = await supabase
+            .from("tenants")
+            .insert({
+              name: user.name || user.email,
+              organization_name: `${user.name || user.email} Org`,
+              owner_user_id: user.id,
+              owner_email: user.email,
+              billing_email: user.email,
+              metadata: {
+                auto_created: true,
+                created_from_sync: true,
+                application_id: extApp.application_id,
+                synced_at: new Date().toISOString(),
+              },
+            })
+            .select()
+            .single();
+
+          if (userTenantError) {
+            console.error(`Failed to create tenant for user ${user.email}:`, userTenantError);
+            results.errors.push(
+              `Failed to sync user ${user.email}: ${userTenantError.message}`
+            );
+            continue;
+          }
+
+          userTenantId = newUserTenant.id;
+          results.total_tenants_created++;
+          console.log(`Created tenant for user: ${user.email}`);
         }
 
-        tenantId = newTenant.id;
-        results.total_tenants_created++;
-        console.log(`Created tenant for application: ${extApp.name}`);
-      } else {
-        // Update existing tenant metadata with current user count
-        await supabase
-          .from("tenants")
-          .update({
-            metadata: {
-              auto_created: true,
-              is_application_tenant: true,
-              total_users: extApp.users?.length || 0,
-              last_synced: new Date().toISOString(),
-            },
-          })
-          .eq("id", tenantId);
-      }
-
-      // Check if tenant_application relationship exists
-      const { data: existingRelation } = await supabase
-        .from("tenant_applications")
-        .select("id")
-        .eq("tenant_id", tenantId)
-        .eq("application_id", appId)
-        .maybeSingle();
-
-      // Create relationship if doesn't exist
-      if (!existingRelation) {
-        const { error: relationError } = await supabase
+        // Check if tenant_application relationship exists for this user
+        const { data: existingUserRelation } = await supabase
           .from("tenant_applications")
-          .insert({
-            tenant_id: tenantId,
-            application_id: appId,
-            status: "active",
-            granted_by: "auto_sync",
-            notes: `Application tenant - represents ${extApp.name} with ${extApp.users?.length || 0} users`,
-          });
+          .select("id")
+          .eq("tenant_id", userTenantId)
+          .eq("application_id", appId)
+          .maybeSingle();
 
-        if (relationError) {
-          console.error(`Failed to link tenant to application ${extApp.name}:`, relationError);
-          results.errors.push(
-            `Failed to link tenant to application ${extApp.name}: ${relationError.message}`
-          );
-        } else {
-          results.total_relationships_created++;
-          console.log(`Linked tenant to application ${extApp.name}`);
+        // Create relationship if doesn't exist
+        if (!existingUserRelation) {
+          const { error: userRelationError } = await supabase
+            .from("tenant_applications")
+            .insert({
+              tenant_id: userTenantId,
+              application_id: appId,
+              status: "active",
+              granted_by: "auto_sync",
+              notes: `Auto-synced from ${extApp.name} for user ${user.email}`,
+            });
+
+          if (userRelationError) {
+            console.error(`Failed to link user tenant to application:`, userRelationError);
+            results.errors.push(
+              `Failed to link tenant for ${user.email}: ${userRelationError.message}`
+            );
+          } else {
+            results.total_relationships_created++;
+            console.log(`Linked tenant to application for user ${user.email}`);
+          }
         }
       }
     }
