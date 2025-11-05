@@ -18,7 +18,7 @@ export function PlanModal({ plan, applications, onClose, onCreate, onUpdate, adm
   const [loading, setLoading] = useState(false);
   const [showFeatureModal, setShowFeatureModal] = useState(false);
   const [editingFeature, setEditingFeature] = useState<{ code: string; value: string } | undefined>();
-  const { showToast } = useToast();
+  const { success, error: showError } = useToast();
   const [features, setFeatures] = useState<Record<string, string>>(
     plan?.entitlements?.features || {}
   );
@@ -51,9 +51,9 @@ export function PlanModal({ plan, applications, onClose, onCreate, onUpdate, adm
         onCreate(data);
       }
       onClose();
-    } catch (error) {
-      console.error('Error saving plan:', error);
-      showToast('Error al guardar el plan', 'error');
+    } catch (err) {
+      console.error('Error saving plan:', err);
+      showError('Error al guardar el plan');
     } finally {
       setLoading(false);
     }
@@ -76,14 +76,14 @@ export function PlanModal({ plan, applications, onClose, onCreate, onUpdate, adm
     });
     setShowFeatureModal(false);
     setEditingFeature(undefined);
-    showToast(`Funcionalidad "${code}" ${editingFeature ? 'actualizada' : 'agregada'}`, 'success');
+    success(`Funcionalidad "${code}" ${editingFeature ? 'actualizada' : 'agregada'}`);
   };
 
   const removeFeature = (featureKey: string) => {
     const newFeatures = { ...features };
     delete newFeatures[featureKey];
     setFeatures(newFeatures);
-    showToast(`Funcionalidad "${featureKey}" eliminada`, 'success');
+    success(`Funcionalidad "${featureKey}" eliminada`);
   };
 
   return (
