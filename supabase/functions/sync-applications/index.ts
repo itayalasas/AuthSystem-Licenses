@@ -259,6 +259,22 @@ Deno.serve(async (req: Request) => {
       console.log(`Successfully synced ${successfullySyncedUsers.length} users for ${extApp.name}`);
 
       for (const user of successfullySyncedUsers) {
+        // Debug: log user data
+        console.log(`Processing tenant for user:`, JSON.stringify({
+          id: user.id,
+          email: user.email,
+          name: user.name,
+        }));
+
+        // Validate user has email before processing
+        if (!user.email || user.email.trim() === '') {
+          console.error(`Skipping tenant creation for user ${user.id}: missing email`);
+          results.errors.push(
+            `Failed to create tenant for user ${user.name || user.id}: missing email address`
+          );
+          continue;
+        }
+
         const { data: existingUserTenant } = await supabase
           .from("tenants")
           .select("id")
@@ -268,11 +284,13 @@ Deno.serve(async (req: Request) => {
         let userTenantId = existingUserTenant?.id;
 
         if (!existingUserTenant) {
+          const tenantName = user.name && user.name.trim() !== '' ? user.name : user.email;
+
           const { data: newUserTenant, error: userTenantError } = await supabase
             .from("tenants")
             .insert({
-              name: user.name || user.email,
-              organization_name: `${user.name || user.email} Org`,
+              name: tenantName,
+              organization_name: `${tenantName} Org`,
               owner_user_id: user.id,
               owner_email: user.email,
               billing_email: user.email,
