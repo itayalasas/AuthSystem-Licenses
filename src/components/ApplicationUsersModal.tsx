@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X, Users, Mail, Calendar, Clock, ExternalLink } from 'lucide-react';
+import { X, Users, Mail, Calendar, Clock, ExternalLink, CreditCard, AlertCircle, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 import { Button } from './Button';
-import { AdminAPIService, ApplicationUser } from '../lib/admin-api';
+import { AdminAPIService, ApplicationUser, License } from '../lib/admin-api';
 
 interface ApplicationUsersModalProps {
   applicationId: string;
@@ -54,6 +54,40 @@ export function ApplicationUsersModal({
     });
   };
 
+  const handleRenewLicense = async (user: ApplicationUser) => {
+    if (!user.tenant?.id || !user.subscription?.id) {
+      alert('No se puede renovar: el usuario no tiene tenant o suscripción activa');
+      return;
+    }
+
+    try {
+      alert('Funcionalidad de renovación en desarrollo. Se renovará la licencia por 30 días más.');
+    } catch (error) {
+      console.error('Error al renovar licencia:', error);
+      alert('Error al renovar la licencia');
+    }
+  };
+
+  const handleCancelSubscription = async (user: ApplicationUser) => {
+    if (!user.subscription?.id) {
+      alert('No hay suscripción para cancelar');
+      return;
+    }
+
+    const confirmed = confirm(
+      `¿Estás seguro de cancelar la suscripción de ${user.name}? Esta acción no se puede deshacer.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      alert('Funcionalidad de cancelación en desarrollo. Se cancelará la suscripción al final del período actual.');
+    } catch (error) {
+      console.error('Error al cancelar suscripción:', error);
+      alert('Error al cancelar la suscripción');
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden animate-scale-in flex flex-col">
@@ -94,12 +128,12 @@ export function ApplicationUsersModal({
               {users.map((user) => (
                 <div
                   key={user.id}
-                  className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all"
+                  className="bg-white border border-gray-200 rounded-lg p-5 hover:shadow-md transition-all"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 space-y-3">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1 space-y-2">
                       <div>
-                        <h3 className="font-semibold text-gray-900">{user.name}</h3>
+                        <h3 className="font-semibold text-gray-900 text-lg">{user.name}</h3>
                         <div className="flex items-center gap-2 mt-1 text-sm text-gray-600">
                           <Mail size={14} />
                           <span>{user.email}</span>
@@ -143,6 +177,147 @@ export function ApplicationUsersModal({
                       {user.status === 'active' ? 'Activo' : user.status === 'suspended' ? 'Suspendido' : 'Inactivo'}
                     </span>
                   </div>
+
+                  {/* License & Subscription Info */}
+                  {user.subscription || user.license ? (
+                    <div className="border-t border-gray-200 pt-4 space-y-3">
+                      {/* Subscription Info */}
+                      {user.subscription && (
+                        <div className="bg-blue-50 rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <CreditCard size={16} className="text-blue-600" />
+                              <span className="font-semibold text-sm text-gray-900">Suscripción</span>
+                            </div>
+                            <span
+                              className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                                user.subscription.status === 'active'
+                                  ? 'bg-green-100 text-green-700'
+                                  : user.subscription.status === 'trialing'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : user.subscription.status === 'past_due'
+                                  ? 'bg-yellow-100 text-yellow-700'
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}
+                            >
+                              {user.subscription.status === 'active'
+                                ? 'Activa'
+                                : user.subscription.status === 'trialing'
+                                ? 'En prueba'
+                                : user.subscription.status === 'past_due'
+                                ? 'Vencida'
+                                : user.subscription.status}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="text-gray-600">Plan:</span>
+                              <span className="ml-1 font-medium text-gray-900">
+                                {user.subscription.plan_name || 'N/A'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">Precio:</span>
+                              <span className="ml-1 font-medium text-gray-900">
+                                {user.subscription.plan_price ? `$${user.subscription.plan_price} ${user.subscription.plan_currency}` : 'N/A'}
+                              </span>
+                            </div>
+                            {user.subscription.trial_end && (
+                              <div className="col-span-2">
+                                <span className="text-gray-600">Trial termina:</span>
+                                <span className="ml-1 font-medium text-gray-900">
+                                  {formatDate(user.subscription.trial_end)}
+                                </span>
+                              </div>
+                            )}
+                            <div className="col-span-2">
+                              <span className="text-gray-600">Período:</span>
+                              <span className="ml-1 font-medium text-gray-900">
+                                {formatDate(user.subscription.period_start)} - {formatDate(user.subscription.period_end)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* License Info */}
+                      {user.license && (
+                        <div className="bg-green-50 rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle size={16} className="text-green-600" />
+                              <span className="font-semibold text-sm text-gray-900">Licencia</span>
+                            </div>
+                            <span
+                              className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                                user.license.status === 'active'
+                                  ? 'bg-green-100 text-green-700'
+                                  : user.license.status === 'expired'
+                                  ? 'bg-red-100 text-red-700'
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}
+                            >
+                              {user.license.status === 'active'
+                                ? 'Activa'
+                                : user.license.status === 'expired'
+                                ? 'Expirada'
+                                : user.license.status}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="text-gray-600">Tipo:</span>
+                              <span className="ml-1 font-medium text-gray-900 capitalize">
+                                {user.license.type}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">Expira:</span>
+                              <span className="ml-1 font-medium text-gray-900">
+                                {formatDateTime(user.license.expires_at)}
+                              </span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-gray-600">Token JTI:</span>
+                              <code className="ml-1 text-xs bg-white px-1.5 py-0.5 rounded font-mono text-gray-700">
+                                {user.license.jti.substring(0, 16)}...
+                              </code>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2 pt-2">
+                        <button
+                          className="flex-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                          onClick={() => handleRenewLicense(user)}
+                        >
+                          <RefreshCw size={14} />
+                          Renovar Licencia
+                        </button>
+                        <button
+                          className="flex-1 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-100 hover:bg-red-200 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                          onClick={() => handleCancelSubscription(user)}
+                        >
+                          <XCircle size={14} />
+                          Cancelar Suscripción
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="border-t border-gray-200 pt-4">
+                      <div className="bg-yellow-50 rounded-lg p-3 flex items-start gap-2">
+                        <AlertCircle size={16} className="text-yellow-600 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-yellow-900">Sin licencia activa</p>
+                          <p className="text-xs text-yellow-700 mt-0.5">
+                            Este usuario no tiene una suscripción o licencia asignada.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

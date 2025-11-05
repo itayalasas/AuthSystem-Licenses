@@ -522,7 +522,7 @@ Deno.serve(async (req: Request) => {
     if (path.match(/^applications\/[0-9a-f-]+\/users$/) && req.method === "GET") {
       const applicationId = path.split("/")[1];
 
-      const { data, error } = await supabase
+      const { data: users, error } = await supabase
         .from("application_users")
         .select("*")
         .eq("application_id", applicationId)
@@ -530,8 +530,64 @@ Deno.serve(async (req: Request) => {
 
       if (error) throw error;
 
+      const enrichedUsers = await Promise.all(
+        (users || []).map(async (user) => {
+          const { data: tenant } = await supabase
+            .from("tenants")
+            .select("id, name, status")
+            .eq("owner_user_id", user.external_user_id)
+            .maybeSingle();
+
+          if (!tenant) return { ...user, tenant: null, subscription: null, license: null };
+
+          const { data: tenantApp } = await supabase
+            .from("tenant_applications")
+            .select(`
+              subscription_id,
+              subscription:subscriptions(
+                id,
+                status,
+                plan_id,
+                trial_start,
+                trial_end,
+                period_start,
+                period_end,
+                plan:plans(name, price, currency)
+              )
+            `)
+            .eq("tenant_id", tenant.id)
+            .eq("application_id", applicationId)
+            .eq("status", "active")
+            .maybeSingle();
+
+          const subscription = tenantApp?.subscription;
+
+          const { data: license } = await supabase
+            .from("licenses")
+            .select("*")
+            .eq("tenant_id", tenant.id)
+            .eq("subscription_id", subscription?.id)
+            .eq("status", "active")
+            .order("issued_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          return {
+            ...user,
+            tenant,
+            subscription: subscription ? {
+              ...subscription,
+              plan_name: subscription.plan?.name,
+              plan_price: subscription.plan?.price,
+              plan_currency: subscription.plan?.currency,
+            } : null,
+            license,
+          };
+        })
+      );
+
       return new Response(
-        JSON.stringify({ success: true, data: data || [] }),
+        JSON.stringify({ success: true, data: enrichedUsers }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }

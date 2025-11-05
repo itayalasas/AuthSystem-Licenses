@@ -140,7 +140,8 @@ Deno.serve(async (req: Request) => {
       const { data: trialPlan } = await supabase
         .from('plans')
         .select('*')
-        .eq('name', 'Free')
+        .eq('name', 'Starter')
+        .eq('is_active', true)
         .maybeSingle();
 
       if (trialPlan) {

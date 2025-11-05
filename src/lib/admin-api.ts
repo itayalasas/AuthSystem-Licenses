@@ -5,6 +5,32 @@ const getAdminApiUrl = () => {
   return `${supabaseUrl}/functions/v1/admin-api`;
 };
 
+interface License {
+  id: string;
+  jti: string;
+  tenant_id: string;
+  subscription_id: string;
+  type: 'trial' | 'paid' | 'lifetime' | 'promotional';
+  status: 'active' | 'expired' | 'revoked' | 'suspended';
+  issued_at: string;
+  expires_at: string;
+  last_validated_at?: string;
+  entitlements: any;
+}
+
+interface Subscription {
+  id: string;
+  status: string;
+  plan_name?: string;
+  plan_price?: number;
+  plan_currency?: string;
+  trial_start?: string;
+  trial_end?: string;
+  period_start: string;
+  period_end: string;
+  plan?: any;
+}
+
 interface ApplicationUser {
   id: string;
   external_user_id: string;
@@ -13,6 +39,13 @@ interface ApplicationUser {
   status: string;
   last_login?: string;
   created_at: string;
+  tenant?: {
+    id: string;
+    name: string;
+    status: string;
+  };
+  subscription?: Subscription;
+  license?: License;
 }
 
 interface Application {
@@ -450,4 +483,4 @@ class AdminAPIService {
 }
 
 export { AdminAPIService };
-export type { Application, ApplicationUser, Tenant, TenantApplication, Plan, AuditLog, DashboardStats };
+export type { Application, ApplicationUser, Tenant, TenantApplication, Plan, AuditLog, DashboardStats, License, Subscription };
