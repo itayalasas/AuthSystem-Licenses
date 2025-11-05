@@ -21,6 +21,7 @@ export function useToast() {
   const success = useCallback((message: string) => addToast(message, 'success'), [addToast]);
   const error = useCallback((message: string) => addToast(message, 'error'), [addToast]);
   const info = useCallback((message: string) => addToast(message, 'info'), [addToast]);
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info') => addToast(message, type), [addToast]);
 
   return {
     toasts,
@@ -28,5 +29,6 @@ export function useToast() {
     success,
     error,
     info,
+    showToast,
   };
 }
