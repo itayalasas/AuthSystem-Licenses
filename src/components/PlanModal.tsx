@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Trash2, Edit2 } from 'lucide-react';
 import type { Plan, Application } from '../lib/admin-api';
-import { InputModal } from './InputModal';
+import { FeatureModal } from './FeatureModal';
 import { useToast } from '../hooks/useToast';
 
 interface PlanModalProps {
@@ -15,14 +15,11 @@ interface PlanModalProps {
 export function PlanModal({ plan, applications, onClose, onCreate, onUpdate }: PlanModalProps) {
   const isEditing = plan !== null;
   const [loading, setLoading] = useState(false);
-  const [showInputModal, setShowInputModal] = useState(false);
+  const [showFeatureModal, setShowFeatureModal] = useState(false);
+  const [editingFeature, setEditingFeature] = useState<{ name: string; value: number } | undefined>();
   const { showToast } = useToast();
-  const [entitlements, setEntitlements] = useState<Record<string, any>>(
-    plan?.entitlements || {
-      max_users: 0,
-      max_storage_gb: 0,
-      features: {},
-    }
+  const [features, setFeatures] = useState<Record<string, number>>(
+    plan?.entitlements?.features || {}
   );
 
   const [formData, setFormData] = useState({
@@ -42,7 +39,9 @@ export function PlanModal({ plan, applications, onClose, onCreate, onUpdate }: P
     try {
       const data = {
         ...formData,
-        entitlements,
+        entitlements: {
+          features,
+        },
       };
 
       if (isEditing && onUpdate) {
@@ -60,40 +59,42 @@ export function PlanModal({ plan, applications, onClose, onCreate, onUpdate }: P
   };
 
   const addFeature = () => {
-    setShowInputModal(true);
+    setEditingFeature(undefined);
+    setShowFeatureModal(true);
   };
 
-  const handleAddFeature = (featureName: string) => {
-    setEntitlements({
-      ...entitlements,
-      features: {
-        ...entitlements.features,
-        [featureName]: true,
-      },
+  const editFeature = (name: string, value: number) => {
+    setEditingFeature({ name, value });
+    setShowFeatureModal(true);
+  };
+
+  const handleSaveFeature = (name: string, value: number) => {
+    setFeatures({
+      ...features,
+      [name]: value,
     });
-    setShowInputModal(false);
-    showToast(`Funcionalidad "${featureName}" agregada`, 'success');
+    setShowFeatureModal(false);
+    setEditingFeature(undefined);
+    showToast(`Funcionalidad "${name}" ${editingFeature ? 'actualizada' : 'agregada'}`, 'success');
   };
 
   const removeFeature = (featureKey: string) => {
-    const newFeatures = { ...entitlements.features };
+    const newFeatures = { ...features };
     delete newFeatures[featureKey];
-    setEntitlements({
-      ...entitlements,
-      features: newFeatures,
-    });
+    setFeatures(newFeatures);
+    showToast(`Funcionalidad "${featureKey}" eliminada`, 'success');
   };
 
   return (
     <>
-      <InputModal
-        isOpen={showInputModal}
-        title="Agregar Funcionalidad"
-        description="Ingresa el nombre de la nueva funcionalidad para el plan"
-        placeholder="ej: api_access, advanced_reports"
-        onConfirm={handleAddFeature}
-        onCancel={() => setShowInputModal(false)}
-        confirmText="Agregar"
+      <FeatureModal
+        isOpen={showFeatureModal}
+        onConfirm={handleSaveFeature}
+        onCancel={() => {
+          setShowFeatureModal(false);
+          setEditingFeature(undefined);
+        }}
+        existingFeature={editingFeature}
       />
 
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -230,50 +231,6 @@ export function PlanModal({ plan, applications, onClose, onCreate, onUpdate }: P
             </div>
 
             <div className="border-t border-gray-200 pt-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Límites y Recursos</h3>
-
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Máximo de Usuarios
-                  </label>
-                  <input
-                    type="number"
-                    value={entitlements.max_users}
-                    onChange={(e) =>
-                      setEntitlements({
-                        ...entitlements,
-                        max_users: parseInt(e.target.value) || 0,
-                      })
-                    }
-                    min="0"
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="50"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Almacenamiento (GB)
-                  </label>
-                  <input
-                    type="number"
-                    value={entitlements.max_storage_gb}
-                    onChange={(e) =>
-                      setEntitlements({
-                        ...entitlements,
-                        max_storage_gb: parseInt(e.target.value) || 0,
-                      })
-                    }
-                    min="0"
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="100"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-200 pt-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-gray-900">Funcionalidades</h3>
                 <button
@@ -286,40 +243,42 @@ export function PlanModal({ plan, applications, onClose, onCreate, onUpdate }: P
               </div>
 
               <div className="space-y-2">
-                {Object.keys(entitlements.features || {}).length === 0 ? (
+                {Object.keys(features).length === 0 ? (
                   <p className="text-sm text-gray-500 text-center py-4">
                     No hay funcionalidades configuradas
                   </p>
                 ) : (
-                  Object.entries(entitlements.features || {}).map(([key, value]) => (
+                  Object.entries(features).map(([key, value]) => (
                     <div
                       key={key}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                     >
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={value as boolean}
-                          onChange={(e) =>
-                            setEntitlements({
-                              ...entitlements,
-                              features: {
-                                ...entitlements.features,
-                                [key]: e.target.checked,
-                              },
-                            })
-                          }
-                          className="w-5 h-5 text-blue-600"
-                        />
-                        <span className="text-sm font-medium text-gray-900">{key}</span>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-semibold text-gray-900">{key}</span>
+                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                            {value === 0 ? 'Ilimitado' : value}
+                          </span>
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => removeFeature(key)}
-                        className="text-red-600 hover:text-red-800 text-sm font-medium"
-                      >
-                        Eliminar
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => editFeature(key, value)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Editar"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeFeature(key)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
