@@ -487,25 +487,69 @@ export function Dashboard() {
             )}
 
             {activeView === 'manual' && (
-              <div className="animate-fade-in bg-white rounded-xl border border-gray-200 p-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Documentación</h2>
-                <p className="text-gray-600 mb-6">
-                  Consulta la documentación completa del sistema en los archivos:
-                </p>
-                <ul className="space-y-2 text-sm text-gray-700">
-                  <li className="flex items-center gap-2">
-                    <BookOpen size={16} className="text-blue-600" />
-                    <code className="bg-gray-100 px-2 py-1 rounded">MANUAL_DE_USO.md</code>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <BookOpen size={16} className="text-blue-600" />
-                    <code className="bg-gray-100 px-2 py-1 rounded">CONFIGURACION_CRON_SYNC.md</code>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <BookOpen size={16} className="text-blue-600" />
-                    <code className="bg-gray-100 px-2 py-1 rounded">INTEGRACION_PARA_DESARROLLADORES.md</code>
-                  </li>
-                </ul>
+              <div className="animate-fade-in">
+                <div className="bg-gradient-to-r from-blue-600 to-blue-800 rounded-xl p-8 mb-6 text-white">
+                  <div className="flex items-center gap-3 mb-3">
+                    <BookOpen className="w-8 h-8" />
+                    <h2 className="text-3xl font-bold">Documentación de APIs</h2>
+                  </div>
+                  <p className="text-blue-100 mb-6">
+                    Explora todas las APIs disponibles con ejemplos de código, parámetros y respuestas
+                  </p>
+                  <Button
+                    variant="secondary"
+                    onClick={() => window.open('/api-docs', '_blank')}
+                    icon={<BookOpen size={16} />}
+                  >
+                    Abrir Documentación Completa
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">APIs Disponibles</h3>
+                    <ul className="space-y-2 text-sm text-gray-700">
+                      <li className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                        <span>Validation API - Validación de usuarios y licencias</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-600 rounded-full"></div>
+                        <span>Tenant Onboarding - Registro de nuevos usuarios</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-purple-600 rounded-full"></div>
+                        <span>Payment Processor - Consulta de suscripciones</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-orange-600 rounded-full"></div>
+                        <span>Payment Manager - Gestión de pagos</span>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-red-600 rounded-full"></div>
+                        <span>Admin API - Administración del sistema</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Recursos Adicionales</h3>
+                    <ul className="space-y-2 text-sm text-gray-700">
+                      <li className="flex items-center gap-2">
+                        <BookOpen size={16} className="text-blue-600" />
+                        <code className="bg-gray-100 px-2 py-1 rounded">MANUAL_DE_USO.md</code>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <BookOpen size={16} className="text-blue-600" />
+                        <code className="bg-gray-100 px-2 py-1 rounded">INTEGRACION_PARA_DESARROLLADORES.md</code>
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <BookOpen size={16} className="text-blue-600" />
+                        <code className="bg-gray-100 px-2 py-1 rounded">GUIA_COMPLETA_API_EXTERNAS_v2.md</code>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
               </div>
             )}
           </div>
