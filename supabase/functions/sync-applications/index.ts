@@ -192,7 +192,6 @@ Deno.serve(async (req: Request) => {
       console.log(`Created application: ${createdApp.name} (${createdApp.external_app_id})`);
     }
 
-    // Sync users for all applications
     console.log("Starting user synchronization...");
 
     for (const extApp of externalApps) {
@@ -201,7 +200,6 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      // Find the internal application ID
       const internalApp = existingApps?.find(
         app => app.external_app_id === extApp.application_id
       ) || results.created_apps.find(
@@ -217,12 +215,9 @@ Deno.serve(async (req: Request) => {
 
       console.log(`Processing ${extApp.users.length} users for ${extApp.name}`);
 
-      // Track successfully synced users
       const successfullySyncedUsers = [];
 
-      // Sync each user
       for (const user of extApp.users) {
-        // Validate email before processing
         if (!user.email || user.email.trim() === '') {
           console.error(`Skipping user ${user.id} for ${extApp.name}: missing email`);
           results.errors.push(
@@ -243,12 +238,10 @@ Deno.serve(async (req: Request) => {
           },
         };
 
-        // Upsert user (insert or update if exists)
         const { error: upsertError } = await supabase
           .from("application_users")
           .upsert(userData, {
-            onConflict: "application_id,external_user_id",
-            ignoreDuplicates: false,
+            onConflict: "application_id, external_user_id",
           });
 
         if (upsertError) {
@@ -265,9 +258,7 @@ Deno.serve(async (req: Request) => {
 
       console.log(`Successfully synced ${successfullySyncedUsers.length} users for ${extApp.name}`);
 
-      // Create individual tenants ONLY for successfully synced users
       for (const user of successfullySyncedUsers) {
-        // Check if tenant already exists for this user
         const { data: existingUserTenant } = await supabase
           .from("tenants")
           .select("id")
@@ -276,7 +267,6 @@ Deno.serve(async (req: Request) => {
 
         let userTenantId = existingUserTenant?.id;
 
-        // Create tenant if doesn't exist
         if (!existingUserTenant) {
           const { data: newUserTenant, error: userTenantError } = await supabase
             .from("tenants")
@@ -309,7 +299,6 @@ Deno.serve(async (req: Request) => {
           console.log(`Created tenant for user: ${user.email}`);
         }
 
-        // Check if tenant_application relationship exists for this user
         const { data: existingUserRelation } = await supabase
           .from("tenant_applications")
           .select("id")
@@ -317,7 +306,6 @@ Deno.serve(async (req: Request) => {
           .eq("application_id", appId)
           .maybeSingle();
 
-        // Create relationship if doesn't exist
         if (!existingUserRelation) {
           const { error: userRelationError } = await supabase
             .from("tenant_applications")
