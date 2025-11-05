@@ -230,7 +230,7 @@ Deno.serve(async (req: Request) => {
         .from("applications")
         .select(`
           *,
-          plan:plans(
+          plan:plans!plan_id(
             id,
             name,
             price,
