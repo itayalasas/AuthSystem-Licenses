@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 interface OnboardingPayload {
-  application_id: string;
+  external_app_id: string;
   user_id: string;
   email: string;
   name: string;
@@ -39,11 +39,11 @@ Deno.serve(async (req: Request) => {
 
     const payload: OnboardingPayload = await req.json();
 
-    const { application_id, user_id, email, name, company_name, subdomain, plan_id, start_trial = true } = payload;
+    const { external_app_id, user_id, email, name, company_name, subdomain, plan_id, start_trial = true } = payload;
 
-    if (!application_id || !user_id || !email || !name) {
+    if (!external_app_id || !user_id || !email || !name) {
       return new Response(
-        JSON.stringify({ success: false, error: 'Faltan campos requeridos: application_id, user_id, email, name' }),
+        JSON.stringify({ success: false, error: 'Faltan campos requeridos: external_app_id, user_id, email, name' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -51,7 +51,7 @@ Deno.serve(async (req: Request) => {
     const { data: application } = await supabase
       .from('applications')
       .select('*')
-      .eq('id', application_id)
+      .eq('external_app_id', external_app_id)
       .eq('is_active', true)
       .maybeSingle();
 
@@ -61,6 +61,8 @@ Deno.serve(async (req: Request) => {
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const application_id = application.id;
 
     const { data: existingTenant } = await supabase
       .from('tenants')
@@ -124,7 +126,7 @@ Deno.serve(async (req: Request) => {
         metadata: {
           subdomain: tenantSubdomain,
           created_via: 'auto-onboarding',
-          application_id: application_id,
+          external_app_id: external_app_id,
           onboarded_at: new Date().toISOString(),
         },
       })
