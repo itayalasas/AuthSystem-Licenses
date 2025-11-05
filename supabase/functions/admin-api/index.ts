@@ -483,7 +483,7 @@ Deno.serve(async (req: Request) => {
     if (path === "plans" && method === "POST") {
       const body = await req.json();
 
-      const { data, error } = await supabase
+      const { data: plan, error } = await supabase
         .from("plans")
         .insert(body)
         .select()
@@ -491,8 +491,21 @@ Deno.serve(async (req: Request) => {
 
       if (error) throw error;
 
+      // Auto-assign plan to application
+      if (plan && body.application_id) {
+        const maxUsers = plan.entitlements?.features?.max_users || 0;
+
+        await supabase
+          .from("applications")
+          .update({
+            plan_id: plan.id,
+            max_users: maxUsers
+          })
+          .eq("id", body.application_id);
+      }
+
       return new Response(
-        JSON.stringify({ success: true, data }),
+        JSON.stringify({ success: true, data: plan }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }

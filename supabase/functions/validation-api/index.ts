@@ -6,6 +6,48 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, X-API-Key, Authorization, X-Client-Info, Apikey',
 };
 
+// Helper function to enrich entitlements with catalog information
+async function enrichEntitlements(supabase: any, entitlements: any) {
+  if (!entitlements?.features) {
+    return { features: [] };
+  }
+
+  const featureCodes = Object.keys(entitlements.features);
+
+  if (featureCodes.length === 0) {
+    return { features: [] };
+  }
+
+  // Get feature catalog info for all features
+  const { data: catalogFeatures } = await supabase
+    .from('feature_catalog')
+    .select('code, name, description, value_type, unit, category')
+    .in('code', featureCodes)
+    .eq('active', true);
+
+  const catalogMap = new Map(
+    catalogFeatures?.map((f: any) => [f.code, f]) || []
+  );
+
+  // Transform features to enriched format
+  const enrichedFeatures = featureCodes.map(code => {
+    const catalog = catalogMap.get(code);
+    const value = entitlements.features[code];
+
+    return {
+      code,
+      name: catalog?.name || code,
+      description: catalog?.description || '',
+      value,
+      value_type: catalog?.value_type || 'text',
+      unit: catalog?.unit,
+      category: catalog?.category || 'other',
+    };
+  });
+
+  return { features: enrichedFeatures };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -116,7 +158,11 @@ Deno.serve(async (req: Request) => {
 
       // Generate short-lived license token
       let licenseToken = null;
-      if (isValid && subscription) {
+      let enrichedEntitlements = null;
+
+      if (isValid && subscription && subscription.plan) {
+        enrichedEntitlements = await enrichEntitlements(supabase, subscription.plan.entitlements);
+
         const now = new Date();
         const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
         const jti = crypto.randomUUID();
@@ -141,7 +187,7 @@ Deno.serve(async (req: Request) => {
             jti: license.jti,
             tenant_id: license.tenant_id,
             expires_at: license.expires_at,
-            entitlements: license.entitlements,
+            entitlements: enrichedEntitlements,
           };
         }
       }
@@ -168,7 +214,7 @@ Deno.serve(async (req: Request) => {
             trial_end: subscription.trial_end,
             period_start: subscription.period_start,
             period_end: subscription.period_end,
-            entitlements: subscription.plan?.entitlements,
+            entitlements: enrichedEntitlements,
           } : null,
           license: licenseToken,
           reason: isValid ? undefined : reason,
@@ -249,6 +295,8 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      const enrichedEntitlements = await enrichEntitlements(supabase, license.entitlements);
+
       return new Response(
         JSON.stringify({
           success: true,
@@ -258,7 +306,7 @@ Deno.serve(async (req: Request) => {
             tenant_id: license.tenant_id,
             type: license.type,
             expires_at: license.expires_at,
-            entitlements: license.entitlements,
+            entitlements: enrichedEntitlements,
           },
           subscription: license.subscription,
         }),
@@ -312,13 +360,16 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const enabled = license.entitlements?.features?.[feature] === true;
+      const enrichedEntitlements = await enrichEntitlements(supabase, license.entitlements);
+      const featureData = enrichedEntitlements.features.find((f: any) => f.code === feature);
+      const enabled = featureData?.value === true || featureData?.value === 'true';
 
       return new Response(
         JSON.stringify({
           success: true,
           enabled,
-          entitlements: license.entitlements,
+          feature: featureData || null,
+          entitlements: enrichedEntitlements,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

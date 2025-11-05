@@ -33,21 +33,14 @@ export function PlanSelector({ app, plans, onAssignPlan }: PlanSelectorProps) {
   }
 
   if (app.plan_id) {
+    const currentPlan = plans.find(p => p.id === app.plan_id);
     return (
       <div className="flex items-center gap-2">
-        <select
-          value={app.plan_id}
-          onChange={handleChange}
-          onClick={(e) => e.stopPropagation()}
-          disabled={loading}
-          className="text-xs border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
-        >
-          {plans.map((plan) => (
-            <option key={plan.id} value={plan.id}>
-              {plan.name}
-            </option>
-          ))}
-        </select>
+        <CreditCard size={14} className="text-blue-600 flex-shrink-0" />
+        <span className="text-xs font-medium text-gray-700">
+          {currentPlan?.name || 'Plan asignado'}
+        </span>
+        <span className="text-xs text-gray-500">(configurado en el plan)</span>
       </div>
     );
   }
