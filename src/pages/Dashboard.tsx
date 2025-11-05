@@ -30,6 +30,7 @@ import { TenantDetailModal } from '../components/TenantDetailModal';
 import { ApplicationModal } from '../components/ApplicationModal';
 import { PlanModal } from '../components/PlanModal';
 import { ApplicationUsersModal } from '../components/ApplicationUsersModal';
+import { ApplicationPlansModal } from '../components/ApplicationPlansModal';
 import { PlanCard } from '../components/PlanCard';
 import { PendingPaymentsView } from '../components/PendingPaymentsView';
 
@@ -54,6 +55,8 @@ export function Dashboard() {
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [showUsersModal, setShowUsersModal] = useState(false);
   const [selectedAppForUsers, setSelectedAppForUsers] = useState<Application | null>(null);
+  const [showPlansModal, setShowPlansModal] = useState(false);
+  const [selectedAppForPlans, setSelectedAppForPlans] = useState<Application | null>(null);
   const { toasts, removeToast, success, error: showError, info } = useToast();
 
   useEffect(() => {
@@ -210,14 +213,9 @@ export function Dashboard() {
     }
   };
 
-  const handleAssignPlan = async (app: Application, planId: string) => {
-    try {
-      await adminApi.assignPlanToApplication(app.id, planId);
-      success(`Plan asignado a ${app.name}`);
-      await loadDashboardData();
-    } catch (err) {
-      showError('Error al asignar el plan');
-    }
+  const handleViewAppPlans = (app: Application) => {
+    setSelectedAppForPlans(app);
+    setShowPlansModal(true);
   };
 
   const handleUpdatePlan = async (data: any) => {
@@ -439,7 +437,7 @@ export function Dashboard() {
                     setSelectedAppForUsers(app);
                     setShowUsersModal(true);
                   }}
-                  onAssignPlan={handleAssignPlan}
+                  onViewPlans={handleViewAppPlans}
                 />
               </div>
             )}
@@ -694,6 +692,28 @@ export function Dashboard() {
             setShowUsersModal(false);
             setSelectedAppForUsers(null);
           }}
+        />
+      )}
+
+      {showPlansModal && selectedAppForPlans && (
+        <ApplicationPlansModal
+          application={selectedAppForPlans}
+          plans={plans.filter(p => p.application_id === selectedAppForPlans.id)}
+          onClose={() => {
+            setShowPlansModal(false);
+            setSelectedAppForPlans(null);
+          }}
+          onAddPlan={() => {
+            setShowPlansModal(false);
+            setSelectedPlan(null);
+            setShowPlanModal(true);
+          }}
+          onEditPlan={(plan) => {
+            setShowPlansModal(false);
+            setSelectedPlan(plan);
+            setShowPlanModal(true);
+          }}
+          onDeletePlan={handleDeletePlan}
         />
       )}
     </div>
