@@ -132,7 +132,9 @@ export function ApplicationUsersModal({
       await adminApi.createTenant({
         name: user.name,
         owner_user_id: user.external_user_id,
-        external_tenant_id: null,
+        owner_email: user.email,
+        billing_email: user.email,
+        organization_name: `${user.name} Org`,
       });
       showToast('Tenant creado exitosamente', 'success');
       await loadUsers();

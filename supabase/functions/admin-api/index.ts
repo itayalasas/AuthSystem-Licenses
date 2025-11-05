@@ -101,12 +101,28 @@ Deno.serve(async (req: Request) => {
     if (path === "tenants" && method === "POST") {
       const body = await req.json();
 
+      if (!body.owner_email) {
+        return new Response(
+          JSON.stringify({ success: false, error: "owner_email is required" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
       const { data: tenant, error: tenantError } = await supabase
         .from("tenants")
         .insert({
           name: body.name,
+          organization_name: body.organization_name || body.name,
           owner_user_id: body.owner_user_id,
+          owner_email: body.owner_email,
+          billing_email: body.billing_email || body.owner_email,
           external_tenant_id: body.external_tenant_id || null,
+          domain: body.domain || null,
+          tax_id: body.tax_id || null,
+          metadata: body.metadata || {},
           status: "active",
         })
         .select()
