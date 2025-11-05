@@ -348,6 +348,27 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    if (path.match(/^plans\/[0-9a-f-]+$/) && method === "PUT") {
+      const planId = path.split("/")[1];
+      const body = await req.json();
+
+      const { data: plan, error } = await supabase
+        .from("plans")
+        .update(body)
+        .eq("id", planId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      return new Response(
+        JSON.stringify({ success: true, data: plan }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     if (path.match(/^plans\/[0-9a-f-]+$/) && method === "DELETE") {
       const planId = path.split("/")[1];
 
