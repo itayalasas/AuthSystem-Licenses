@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X, Users, Mail, Calendar, Clock, ExternalLink, CreditCard, AlertCircle, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
+import { X, Users, Mail, Calendar, Clock, ExternalLink, CreditCard, AlertCircle, CheckCircle, XCircle, RefreshCw, Plus } from 'lucide-react';
 import { Button } from './Button';
-import { AdminAPIService, ApplicationUser, License } from '../lib/admin-api';
+import { AdminAPIService, ApplicationUser, License, Plan } from '../lib/admin-api';
 import { ConfirmModal } from './ConfirmModal';
 import { useToast } from '../hooks/useToast';
 
@@ -19,13 +19,16 @@ export function ApplicationUsersModal({
   onClose,
 }: ApplicationUsersModalProps) {
   const [users, setUsers] = useState<ApplicationUser[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
   const [selectedUser, setSelectedUser] = useState<ApplicationUser | null>(null);
+  const [assigningPlan, setAssigningPlan] = useState<string | null>(null);
   const { showToast } = useToast();
 
   useEffect(() => {
     loadUsers();
+    loadPlans();
   }, [applicationId]);
 
   const loadUsers = async () => {
@@ -37,6 +40,15 @@ export function ApplicationUsersModal({
       console.error('Failed to load users:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPlans = async () => {
+    try {
+      const data = await adminApi.getPlans(applicationId);
+      setPlans(data.filter(p => p.is_active !== false));
+    } catch (error) {
+      console.error('Failed to load plans:', error);
     }
   };
 
@@ -91,6 +103,25 @@ export function ApplicationUsersModal({
       showToast('Error al cancelar la suscripción', 'error');
     } finally {
       setSelectedUser(null);
+    }
+  };
+
+  const handleAssignPlan = async (user: ApplicationUser, planId: string) => {
+    if (!user.tenant?.id) {
+      showToast('El usuario no tiene un tenant asociado. No se puede asignar un plan.', 'error');
+      return;
+    }
+
+    try {
+      setAssigningPlan(user.id);
+      await adminApi.assignPlanToUser(user.external_user_id, planId, applicationId);
+      showToast('Plan asignado exitosamente', 'success');
+      await loadUsers();
+    } catch (error) {
+      console.error('Error al asignar plan:', error);
+      showToast('Error al asignar el plan', 'error');
+    } finally {
+      setAssigningPlan(null);
     }
   };
 
@@ -328,7 +359,7 @@ export function ApplicationUsersModal({
                     </div>
                   ) : (
                     <div className="border-t border-gray-200 pt-4">
-                      <div className="bg-yellow-50 rounded-lg p-3 flex items-start gap-2">
+                      <div className="bg-yellow-50 rounded-lg p-3 flex items-start gap-2 mb-3">
                         <AlertCircle size={16} className="text-yellow-600 flex-shrink-0 mt-0.5" />
                         <div className="flex-1">
                           <p className="text-sm font-medium text-yellow-900">Sin licencia activa</p>
@@ -337,6 +368,55 @@ export function ApplicationUsersModal({
                           </p>
                         </div>
                       </div>
+
+                      {plans.length > 0 && user.tenant && (
+                        <div className="space-y-2">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Asignar plan de suscripción:
+                          </label>
+                          <div className="grid grid-cols-1 gap-2">
+                            {plans.map((plan) => (
+                              <button
+                                key={plan.id}
+                                onClick={() => handleAssignPlan(user, plan.id)}
+                                disabled={assigningPlan === user.id}
+                                className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
+                              >
+                                <div className="flex-1 text-left">
+                                  <p className="text-sm font-medium text-gray-900 group-hover:text-blue-900">
+                                    {plan.name}
+                                  </p>
+                                  <p className="text-xs text-gray-600 mt-0.5">
+                                    {plan.currency} {Number(plan.price).toFixed(2)} /{' '}
+                                    {plan.billing_cycle === 'monthly' ? 'mes' : 'año'}
+                                    {plan.trial_days && plan.trial_days > 0 && (
+                                      <span className="ml-2 text-blue-600">
+                                        • {plan.trial_days} días de prueba
+                                      </span>
+                                    )}
+                                  </p>
+                                </div>
+                                <Plus
+                                  size={18}
+                                  className="text-gray-400 group-hover:text-blue-600 transition-colors flex-shrink-0"
+                                />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {plans.length === 0 && (
+                        <p className="text-xs text-gray-500 text-center py-2">
+                          No hay planes disponibles para asignar. Crea un plan primero.
+                        </p>
+                      )}
+
+                      {!user.tenant && (
+                        <p className="text-xs text-gray-500 text-center py-2">
+                          Este usuario no tiene un tenant asociado. No se puede asignar un plan.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

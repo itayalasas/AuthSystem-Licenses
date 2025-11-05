@@ -561,6 +561,93 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    if (path === "users/assign-plan" && method === "POST") {
+      const body = await req.json();
+      const { external_user_id, plan_id, application_id } = body;
+
+      if (!external_user_id || !plan_id || !application_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Missing required fields" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      const { data: tenant } = await supabase
+        .from("tenants")
+        .select("id")
+        .eq("owner_user_id", external_user_id)
+        .maybeSingle();
+
+      if (!tenant) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Tenant not found for user" }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      const { data: plan } = await supabase
+        .from("plans")
+        .select("trial_days, billing_cycle")
+        .eq("id", plan_id)
+        .single();
+
+      if (!plan) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Plan not found" }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      const trial_days = plan.trial_days || 0;
+      const now = new Date();
+      const trial_end = new Date(now.getTime() + trial_days * 24 * 60 * 60 * 1000);
+      const period_end =
+        plan.billing_cycle === "yearly"
+          ? new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())
+          : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+
+      const { data: subscription, error: subError } = await supabase
+        .from("subscriptions")
+        .insert({
+          tenant_id: tenant.id,
+          plan_id: plan_id,
+          application_id: application_id,
+          status: trial_days > 0 ? "trialing" : "active",
+          period_start: now.toISOString(),
+          period_end: period_end.toISOString(),
+          current_period_start: now.toISOString(),
+          current_period_end: period_end.toISOString(),
+          trial_start: trial_days > 0 ? now.toISOString() : null,
+          trial_end: trial_days > 0 ? trial_end.toISOString() : null,
+        })
+        .select()
+        .single();
+
+      if (subError) throw subError;
+
+      await supabase.from("tenant_applications").upsert({
+        tenant_id: tenant.id,
+        application_id: application_id,
+        subscription_id: subscription.id,
+      });
+
+      return new Response(
+        JSON.stringify({ success: true, data: subscription }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     return new Response(
       JSON.stringify({ success: false, error: "Route not found" }),
       {
