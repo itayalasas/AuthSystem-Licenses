@@ -583,7 +583,10 @@ Deno.serve(async (req: Request) => {
 
       if (!external_user_id || !plan_id || !application_id) {
         return new Response(
-          JSON.stringify({ success: false, error: "Missing required fields" }),
+          JSON.stringify({
+            success: false,
+            error: "Missing required fields: external_user_id, plan_id, application_id"
+          }),
           {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -591,15 +594,20 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const { data: tenant } = await supabase
+      const { data: tenant, error: tenantError } = await supabase
         .from("tenants")
         .select("id")
         .eq("owner_user_id", external_user_id)
         .maybeSingle();
 
+      if (tenantError) throw tenantError;
+
       if (!tenant) {
         return new Response(
-          JSON.stringify({ success: false, error: "Tenant not found for user" }),
+          JSON.stringify({
+            success: false,
+            error: "No tenant found for this user. Please create a tenant first."
+          }),
           {
             status: 404,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -607,15 +615,21 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const { data: plan } = await supabase
+      const { data: plan, error: planError } = await supabase
         .from("plans")
-        .select("trial_days, billing_cycle")
+        .select("*")
         .eq("id", plan_id)
-        .single();
+        .eq("application_id", application_id)
+        .maybeSingle();
+
+      if (planError) throw planError;
 
       if (!plan) {
         return new Response(
-          JSON.stringify({ success: false, error: "Plan not found" }),
+          JSON.stringify({
+            success: false,
+            error: "Plan not found or doesn't belong to the specified application"
+          }),
           {
             status: 404,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -623,41 +637,104 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const trial_days = plan.trial_days || 0;
-      const now = new Date();
-      const trial_end = new Date(now.getTime() + trial_days * 24 * 60 * 60 * 1000);
-      const period_end =
-        plan.billing_cycle === "yearly"
-          ? new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())
-          : new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
-
-      const { data: subscription, error: subError } = await supabase
+      const { data: existingSubscription, error: existingSubError } = await supabase
         .from("subscriptions")
-        .insert({
+        .select("id")
+        .eq("tenant_id", tenant.id)
+        .eq("application_id", application_id)
+        .maybeSingle();
+
+      if (existingSubError) throw existingSubError;
+
+      let subscription;
+
+      if (existingSubscription) {
+        const { data: updatedSub, error: updateError } = await supabase
+          .from("subscriptions")
+          .update({
+            plan_id: plan_id,
+            status: plan.trial_days > 0 ? "trialing" : "active",
+            trial_start: plan.trial_days > 0 ? new Date().toISOString() : null,
+            trial_end: plan.trial_days > 0
+              ? new Date(Date.now() + plan.trial_days * 24 * 60 * 60 * 1000).toISOString()
+              : null,
+          })
+          .eq("id", existingSubscription.id)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+        subscription = updatedSub;
+      } else {
+        const trial_end = plan.trial_days > 0
+          ? new Date(Date.now() + plan.trial_days * 24 * 60 * 60 * 1000).toISOString()
+          : null;
+
+        const period_end = plan.billing_cycle === "annual"
+          ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+        const { data: newSub, error: createError } = await supabase
+          .from("subscriptions")
+          .insert({
+            tenant_id: tenant.id,
+            plan_id: plan_id,
+            application_id: application_id,
+            status: plan.trial_days > 0 ? "trialing" : "active",
+            period_start: new Date().toISOString(),
+            period_end: period_end,
+            current_period_start: new Date().toISOString(),
+            current_period_end: period_end,
+            trial_start: plan.trial_days > 0 ? new Date().toISOString() : null,
+            trial_end: trial_end,
+          })
+          .select()
+          .single();
+
+        if (createError) throw createError;
+        subscription = newSub;
+
+        await supabase
+          .from("tenant_applications")
+          .upsert({
+            tenant_id: tenant.id,
+            application_id: application_id,
+            subscription_id: subscription.id,
+          });
+      }
+
+      const license_key = `${plan.slug || plan.name.replace(/\s+/g, '-')}-${crypto.randomUUID().split('-')[0]}`.toUpperCase();
+
+      const { data: license, error: licenseError } = await supabase
+        .from("licenses")
+        .upsert({
           tenant_id: tenant.id,
-          plan_id: plan_id,
           application_id: application_id,
-          status: trial_days > 0 ? "trialing" : "active",
-          period_start: now.toISOString(),
-          period_end: period_end.toISOString(),
-          current_period_start: now.toISOString(),
-          current_period_end: period_end.toISOString(),
-          trial_start: trial_days > 0 ? now.toISOString() : null,
-          trial_end: trial_days > 0 ? trial_end.toISOString() : null,
+          plan_id: plan_id,
+          license_key: license_key,
+          status: plan.trial_days > 0 ? "trial" : "active",
+          expires_at: plan.trial_days > 0
+            ? new Date(Date.now() + plan.trial_days * 24 * 60 * 60 * 1000).toISOString()
+            : (plan.billing_cycle === "annual"
+                ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+                : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()),
+        }, {
+          onConflict: "tenant_id, application_id",
         })
         .select()
         .single();
 
-      if (subError) throw subError;
-
-      await supabase.from("tenant_applications").upsert({
-        tenant_id: tenant.id,
-        application_id: application_id,
-        subscription_id: subscription.id,
-      });
+      if (licenseError) throw licenseError;
 
       return new Response(
-        JSON.stringify({ success: true, data: subscription }),
+        JSON.stringify({
+          success: true,
+          data: {
+            subscription,
+            license,
+            message: "Plan assigned successfully"
+          }
+        }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
