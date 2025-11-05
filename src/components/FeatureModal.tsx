@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Search } from 'lucide-react';
+import { X, Search, Plus } from 'lucide-react';
 import type { FeatureCatalog } from '../lib/admin-api';
+import { supabase } from '../lib/supabase';
 
 interface FeatureModalProps {
   isOpen: boolean;
@@ -24,6 +25,14 @@ export function FeatureModal({
   const [filteredCatalog, setFilteredCatalog] = useState<FeatureCatalog[]>([]);
   const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showRequestForm, setShowRequestForm] = useState(false);
+  const [requestForm, setRequestForm] = useState({
+    name: '',
+    description: '',
+    category: '',
+    requested_by: '',
+  });
+  const [submittingRequest, setSubmittingRequest] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -101,6 +110,46 @@ export function FeatureModal({
     setSelectedFeature(null);
     setValue('');
     setShowDropdown(false);
+    setShowRequestForm(false);
+    setRequestForm({
+      name: '',
+      description: '',
+      category: '',
+      requested_by: '',
+    });
+  };
+
+  const handleSubmitRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!requestForm.name.trim() || !requestForm.requested_by.trim()) {
+      return;
+    }
+
+    try {
+      setSubmittingRequest(true);
+
+      const { error } = await supabase
+        .from('feature_requests')
+        .insert({
+          name: requestForm.name.trim(),
+          code: requestForm.name.toLowerCase().replace(/\s+/g, '_'),
+          description: requestForm.description.trim() || null,
+          category: requestForm.category.trim() || 'other',
+          requested_by: requestForm.requested_by.trim(),
+          status: 'pending',
+        });
+
+      if (error) throw error;
+
+      alert('¡Solicitud enviada! El equipo revisará tu solicitud pronto.');
+      handleReset();
+      onCancel();
+    } catch (error) {
+      console.error('Error submitting request:', error);
+      alert('Error al enviar la solicitud. Por favor intenta de nuevo.');
+    } finally {
+      setSubmittingRequest(false);
+    }
   };
 
   const handleCancel = () => {
@@ -228,6 +277,26 @@ export function FeatureModal({
                 ))}
               </div>
             )}
+
+            {showDropdown && filteredCatalog.length === 0 && search && (
+              <div className="absolute z-10 w-full mt-2 bg-white border border-gray-300 rounded-lg shadow-lg p-4">
+                <p className="text-sm text-gray-600 mb-3">
+                  No se encontraron funcionalidades que coincidan con "{search}"
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRequestForm(true);
+                    setShowDropdown(false);
+                    setRequestForm(prev => ({ ...prev, name: search }));
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Solicitar esta funcionalidad
+                </button>
+              </div>
+            )}
           </div>
 
           {selectedFeature && (
@@ -269,7 +338,89 @@ export function FeatureModal({
             </>
           )}
 
-          {!selectedFeature && !loading && (
+          {showRequestForm && (
+            <div className="border border-green-200 rounded-lg p-6 bg-green-50">
+              <h4 className="font-bold text-green-900 mb-4 flex items-center gap-2">
+                <Plus className="w-5 h-5" />
+                Solicitar Nueva Funcionalidad
+              </h4>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nombre de la Funcionalidad *
+                  </label>
+                  <input
+                    type="text"
+                    value={requestForm.name}
+                    onChange={(e) => setRequestForm(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Ej: Límite de almacenamiento"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Descripción
+                  </label>
+                  <textarea
+                    value={requestForm.description}
+                    onChange={(e) => setRequestForm(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Describe cómo funcionaría esta funcionalidad..."
+                    rows={3}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Categoría
+                  </label>
+                  <select
+                    value={requestForm.category}
+                    onChange={(e) => setRequestForm(prev => ({ ...prev, category: e.target.value }))}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="">Seleccionar categoría</option>
+                    <option value="limits">Límites</option>
+                    <option value="features">Funcionalidades</option>
+                    <option value="integrations">Integraciones</option>
+                    <option value="security">Seguridad</option>
+                    <option value="performance">Rendimiento</option>
+                    <option value="other">Otra</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tu Email *
+                  </label>
+                  <input
+                    type="email"
+                    value={requestForm.requested_by}
+                    onChange={(e) => setRequestForm(prev => ({ ...prev, requested_by: e.target.value }))}
+                    placeholder="tu@email.com"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowRequestForm(false)}
+                    className="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSubmitRequest}
+                    disabled={!requestForm.name.trim() || !requestForm.requested_by.trim() || submittingRequest}
+                    className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {submittingRequest ? 'Enviando...' : 'Enviar Solicitud'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!selectedFeature && !loading && !showRequestForm && (
             <div className="text-center py-8 text-gray-500">
               <Search className="w-12 h-12 mx-auto mb-3 text-gray-300" />
               <p className="text-sm">
