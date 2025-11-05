@@ -202,12 +202,28 @@ https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/sync-applications?secret=M
 
 ---
 
+## 🔐 Configuración de Autenticación
+
+La API externa ahora requiere autenticación. Necesitas configurar el token en las variables de entorno:
+
+1. Ve a Supabase Dashboard → Settings → Edge Functions → Environment Variables
+2. Agrega la variable:
+   - **Nombre**: `EXTERNAL_AUTH_API_TOKEN`
+   - **Valor**: Tu token de API de auth-systemv1
+
+O usando CLI:
+```bash
+supabase secrets set EXTERNAL_AUTH_API_TOKEN=tu_token_aqui
+```
+
 ## 📊 Cómo Funciona
 
 1. **Obtiene aplicaciones** del sistema externo:
    ```
    https://auth-systemv1.netlify.app/api/application/info
    ```
+
+   **Nota**: Esta API requiere autenticación con Bearer token
 
 2. **Compara** con las aplicaciones existentes en la base de datos
 

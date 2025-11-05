@@ -82,16 +82,25 @@ Deno.serve(async (req: Request) => {
     console.log("Starting application sync from external auth system...");
 
     const externalApiUrl = "https://auth-systemv1.netlify.app/api/application/info";
+    const externalApiToken = Deno.env.get("EXTERNAL_AUTH_API_TOKEN");
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (externalApiToken) {
+      headers["Authorization"] = `Bearer ${externalApiToken}`;
+    }
 
     const response = await fetch(externalApiUrl, {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
     });
 
     if (!response.ok) {
-      throw new Error(`External API returned status ${response.status}`);
+      const errorText = await response.text();
+      console.error(`External API error (${response.status}):`, errorText);
+      throw new Error(`External API returned status ${response.status}. Response: ${errorText}`);
     }
 
     const externalData: ExternalAPIResponse = await response.json();
