@@ -681,6 +681,7 @@ export function Dashboard() {
           }}
           onCreate={handleCreatePlan}
           onUpdate={handleUpdatePlan}
+          adminApi={adminApi}
         />
       )}
 

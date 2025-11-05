@@ -128,6 +128,20 @@ interface DashboardStats {
   recent_tenants: Tenant[];
 }
 
+interface FeatureCatalog {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  value_type: 'number' | 'boolean' | 'text';
+  default_value: string;
+  category: string;
+  unit?: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 class AdminAPIService {
   private adminToken: string;
 
@@ -480,7 +494,30 @@ class AdminAPIService {
 
     return result.data;
   }
+
+  async getFeatureCatalog(search?: string, category?: string): Promise<FeatureCatalog[]> {
+    let url = `${getAdminApiUrl()}/features`;
+    const params = new URLSearchParams();
+
+    if (search) params.append('search', search);
+    if (category) params.append('category', category);
+
+    if (params.toString()) {
+      url += `?${params.toString()}`;
+    }
+
+    const response = await fetch(url, {
+      headers: this.headers,
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to fetch feature catalog');
+    }
+
+    return result.data;
+  }
 }
 
 export { AdminAPIService };
-export type { Application, ApplicationUser, Tenant, TenantApplication, Plan, AuditLog, DashboardStats, License, Subscription };
+export type { Application, ApplicationUser, Tenant, TenantApplication, Plan, AuditLog, DashboardStats, License, Subscription, FeatureCatalog };

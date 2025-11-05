@@ -645,6 +645,37 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    if (path === "features" && method === "GET") {
+      const searchParam = url.searchParams.get("search");
+      const categoryParam = url.searchParams.get("category");
+
+      let query = supabase
+        .from("feature_catalog")
+        .select("*")
+        .eq("active", true)
+        .order("category")
+        .order("name");
+
+      if (searchParam) {
+        query = query.or(`name.ilike.%${searchParam}%,code.ilike.%${searchParam}%,description.ilike.%${searchParam}%`);
+      }
+
+      if (categoryParam) {
+        query = query.eq("category", categoryParam);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      return new Response(
+        JSON.stringify({ success: true, data: data || [] }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     return new Response(
       JSON.stringify({ success: false, error: "Not found" }),
       {

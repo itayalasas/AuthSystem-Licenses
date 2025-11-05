@@ -10,15 +10,16 @@ interface PlanModalProps {
   onClose: () => void;
   onCreate: (data: any) => void;
   onUpdate?: (data: any) => void;
+  adminApi: any;
 }
 
-export function PlanModal({ plan, applications, onClose, onCreate, onUpdate }: PlanModalProps) {
+export function PlanModal({ plan, applications, onClose, onCreate, onUpdate, adminApi }: PlanModalProps) {
   const isEditing = plan !== null;
   const [loading, setLoading] = useState(false);
   const [showFeatureModal, setShowFeatureModal] = useState(false);
-  const [editingFeature, setEditingFeature] = useState<{ name: string; value: number } | undefined>();
+  const [editingFeature, setEditingFeature] = useState<{ code: string; value: string } | undefined>();
   const { showToast } = useToast();
-  const [features, setFeatures] = useState<Record<string, number>>(
+  const [features, setFeatures] = useState<Record<string, string>>(
     plan?.entitlements?.features || {}
   );
 
@@ -63,19 +64,19 @@ export function PlanModal({ plan, applications, onClose, onCreate, onUpdate }: P
     setShowFeatureModal(true);
   };
 
-  const editFeature = (name: string, value: number) => {
-    setEditingFeature({ name, value });
+  const editFeature = (code: string, value: string) => {
+    setEditingFeature({ code, value });
     setShowFeatureModal(true);
   };
 
-  const handleSaveFeature = (name: string, value: number) => {
+  const handleSaveFeature = (code: string, value: string) => {
     setFeatures({
       ...features,
-      [name]: value,
+      [code]: value,
     });
     setShowFeatureModal(false);
     setEditingFeature(undefined);
-    showToast(`Funcionalidad "${name}" ${editingFeature ? 'actualizada' : 'agregada'}`, 'success');
+    showToast(`Funcionalidad "${code}" ${editingFeature ? 'actualizada' : 'agregada'}`, 'success');
   };
 
   const removeFeature = (featureKey: string) => {
@@ -95,6 +96,7 @@ export function PlanModal({ plan, applications, onClose, onCreate, onUpdate }: P
           setEditingFeature(undefined);
         }}
         existingFeature={editingFeature}
+        adminApi={adminApi}
       />
 
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -248,39 +250,45 @@ export function PlanModal({ plan, applications, onClose, onCreate, onUpdate }: P
                     No hay funcionalidades configuradas
                   </p>
                 ) : (
-                  Object.entries(features).map(([key, value]) => (
-                    <div
-                      key={key}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-semibold text-gray-900">{key}</span>
-                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
-                            {value === 0 ? 'Ilimitado' : value}
-                          </span>
+                  Object.entries(features).map(([key, value]) => {
+                    const displayValue = value === '0' || value === 'false' ?
+                      (value === '0' ? 'Ilimitado' : 'Deshabilitado') :
+                      (value === 'true' ? 'Habilitado' : value);
+
+                    return (
+                      <div
+                        key={key}
+                        className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-semibold text-gray-900">{key}</span>
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                              {displayValue}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => editFeature(key, value)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Editar"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeFeature(key)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => editFeature(key, value)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Editar"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeFeature(key)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
