@@ -218,6 +218,18 @@ export function Dashboard() {
     setShowPlansModal(true);
   };
 
+  const handleAssignExistingPlan = async (planId: string) => {
+    if (!selectedAppForPlans) return;
+
+    try {
+      await adminApi.assignExistingPlanToApplication(planId, selectedAppForPlans.id);
+      success('Plan asignado exitosamente');
+      await loadDashboardData();
+    } catch (err) {
+      showError('Error al asignar el plan');
+    }
+  };
+
   const handleUpdatePlan = async (data: any) => {
     if (!selectedPlan) return;
 
@@ -699,6 +711,7 @@ export function Dashboard() {
         <ApplicationPlansModal
           application={selectedAppForPlans}
           plans={plans.filter(p => p.application_id === selectedAppForPlans.id)}
+          allPlans={plans}
           onClose={() => {
             setShowPlansModal(false);
             setSelectedAppForPlans(null);
@@ -714,6 +727,7 @@ export function Dashboard() {
             setShowPlanModal(true);
           }}
           onDeletePlan={handleDeletePlan}
+          onAssignExistingPlan={handleAssignExistingPlan}
         />
       )}
     </div>

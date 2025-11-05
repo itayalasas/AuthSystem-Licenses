@@ -242,8 +242,28 @@ Deno.serve(async (req: Request) => {
 
       if (error) throw error;
 
+      const enrichedData = await Promise.all(
+        (data || []).map(async (app) => {
+          const { count: usersCount } = await supabase
+            .from("application_users")
+            .select("*", { count: "exact", head: true })
+            .eq("application_id", app.id);
+
+          const { count: plansCount } = await supabase
+            .from("plans")
+            .select("*", { count: "exact", head: true })
+            .eq("application_id", app.id);
+
+          return {
+            ...app,
+            users_count: usersCount || 0,
+            plans_count: plansCount || 0,
+          };
+        })
+      );
+
       return new Response(
-        JSON.stringify({ success: true, data }),
+        JSON.stringify({ success: true, data: enrichedData }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }

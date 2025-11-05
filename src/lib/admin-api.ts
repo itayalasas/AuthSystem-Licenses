@@ -62,6 +62,7 @@ interface Application {
   created_at: string;
   updated_at: string;
   users_count?: number;
+  plans_count?: number;
 }
 
 interface Tenant {
@@ -485,6 +486,21 @@ class AdminAPIService {
       method: 'PUT',
       headers: this.headers,
       body: JSON.stringify({ plan_id: planId }),
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to assign plan to application');
+    }
+
+    return result.data;
+  }
+
+  async assignExistingPlanToApplication(planId: string, applicationId: string): Promise<Plan> {
+    const response = await fetch(`${getAdminApiUrl()}/plans/${planId}`, {
+      method: 'PUT',
+      headers: this.headers,
+      body: JSON.stringify({ application_id: applicationId }),
     });
 
     const result = await response.json();

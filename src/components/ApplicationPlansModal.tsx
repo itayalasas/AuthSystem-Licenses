@@ -1,17 +1,44 @@
-import { X, Plus, Edit2, Trash2, DollarSign } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Plus, Edit2, Trash2, DollarSign, Link } from 'lucide-react';
 import { Application, Plan } from '../lib/admin-api';
 import { Button } from './Button';
 
 interface ApplicationPlansModalProps {
   application: Application;
   plans: Plan[];
+  allPlans: Plan[];
   onClose: () => void;
   onAddPlan: () => void;
   onEditPlan: (plan: Plan) => void;
   onDeletePlan: (planId: string) => void;
+  onAssignExistingPlan: (planId: string) => void;
 }
 
-export function ApplicationPlansModal({ application, plans, onClose, onAddPlan, onEditPlan, onDeletePlan }: ApplicationPlansModalProps) {
+export function ApplicationPlansModal({ application, plans, allPlans, onClose, onAddPlan, onEditPlan, onDeletePlan, onAssignExistingPlan }: ApplicationPlansModalProps) {
+  const [showAssignMenu, setShowAssignMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const availablePlans = allPlans.filter(p =>
+    p.application_id !== application.id &&
+    !plans.some(ap => ap.id === p.id)
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowAssignMenu(false);
+      }
+    };
+
+    if (showAssignMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showAssignMenu]);
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
@@ -33,9 +60,63 @@ export function ApplicationPlansModal({ application, plans, onClose, onAddPlan, 
             <p className="text-sm text-gray-600">
               {plans.length} {plans.length === 1 ? 'plan' : 'planes'} configurado{plans.length === 1 ? '' : 's'}
             </p>
-            <Button onClick={onAddPlan} icon={<Plus size={16} />} size="sm">
-              Agregar Plan
-            </Button>
+            <div className="relative" ref={menuRef}>
+              <Button
+                onClick={() => setShowAssignMenu(!showAssignMenu)}
+                icon={<Plus size={16} />}
+                size="sm"
+              >
+                Agregar Plan
+              </Button>
+
+              {showAssignMenu && (
+                <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                  <button
+                    onClick={() => {
+                      setShowAssignMenu(false);
+                      onAddPlan();
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 flex items-center gap-3"
+                  >
+                    <Plus size={16} className="text-blue-600" />
+                    <div>
+                      <p className="font-medium text-gray-900">Crear Nuevo Plan</p>
+                      <p className="text-xs text-gray-500">Crear un plan desde cero</p>
+                    </div>
+                  </button>
+
+                  {availablePlans.length > 0 && (
+                    <>
+                      <div className="px-4 py-2 bg-gray-50 border-b border-gray-100">
+                        <p className="text-xs font-medium text-gray-700">Asignar Plan Existente</p>
+                      </div>
+                      <div className="max-h-64 overflow-y-auto">
+                        {availablePlans.map((plan) => (
+                          <button
+                            key={plan.id}
+                            onClick={() => {
+                              setShowAssignMenu(false);
+                              onAssignExistingPlan(plan.id);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <p className="font-medium text-gray-900 text-sm">{plan.name}</p>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  {plan.currency} {Number(plan.price).toFixed(2)} / {plan.billing_cycle === 'monthly' ? 'mes' : 'año'}
+                                </p>
+                              </div>
+                              <Link size={14} className="text-gray-400 mt-1" />
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {plans.length === 0 ? (
