@@ -515,6 +515,22 @@ export function ApiDocs() {
           </div>
         </div>
 
+        <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-8">
+          <div className="flex items-start gap-3">
+            <Check className="w-5 h-5 text-green-700 mt-0.5" />
+            <div>
+              <h3 className="font-semibold text-green-900 mb-1">✨ Sistema de Licencias Actualizado</h3>
+              <p className="text-green-800 text-sm mb-2">
+                Ahora los usuarios reciben automáticamente una licencia de prueba con el plan <strong>Starter</strong> al registrarse.
+                El endpoint de usuarios también incluye información completa de licencias y suscripciones.
+              </p>
+              <p className="text-green-800 text-sm">
+                📖 Ver documentación detallada en: <code className="bg-green-100 px-2 py-0.5 rounded">GUIA_API_LICENCIAS.md</code>
+              </p>
+            </div>
+          </div>
+        </div>
+
         {API_SECTIONS.map((section, idx) => (
           <div key={idx} className="mb-12">
             <div className="bg-white rounded-lg shadow-sm p-6 mb-4">
