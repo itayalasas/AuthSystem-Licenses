@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Users, Mail, Calendar, Clock, ExternalLink, CreditCard, AlertCircle, CheckCircle, XCircle, RefreshCw, Plus } from 'lucide-react';
+import { X, Users, Mail, Calendar, Clock, ExternalLink, CreditCard, AlertCircle, CheckCircle, XCircle, RefreshCw, Plus, UserPlus } from 'lucide-react';
 import { Button } from './Button';
 import { AdminAPIService, ApplicationUser, License, Plan } from '../lib/admin-api';
 import { ConfirmModal } from './ConfirmModal';
@@ -24,6 +24,7 @@ export function ApplicationUsersModal({
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
   const [selectedUser, setSelectedUser] = useState<ApplicationUser | null>(null);
   const [assigningPlan, setAssigningPlan] = useState<string | null>(null);
+  const [creatingTenant, setCreatingTenant] = useState<string | null>(null);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -122,6 +123,24 @@ export function ApplicationUsersModal({
       showToast('Error al asignar el plan', 'error');
     } finally {
       setAssigningPlan(null);
+    }
+  };
+
+  const handleCreateTenant = async (user: ApplicationUser) => {
+    try {
+      setCreatingTenant(user.id);
+      await adminApi.createTenant({
+        name: user.name,
+        owner_user_id: user.external_user_id,
+        external_tenant_id: null,
+      });
+      showToast('Tenant creado exitosamente', 'success');
+      await loadUsers();
+    } catch (error) {
+      console.error('Error al crear tenant:', error);
+      showToast('Error al crear el tenant', 'error');
+    } finally {
+      setCreatingTenant(null);
     }
   };
 
@@ -406,16 +425,37 @@ export function ApplicationUsersModal({
                         </div>
                       )}
 
-                      {plans.length === 0 && (
+                      {plans.length === 0 && user.tenant && (
                         <p className="text-xs text-gray-500 text-center py-2">
                           No hay planes disponibles para asignar. Crea un plan primero.
                         </p>
                       )}
 
                       {!user.tenant && (
-                        <p className="text-xs text-gray-500 text-center py-2">
-                          Este usuario no tiene un tenant asociado. No se puede asignar un plan.
-                        </p>
+                        <div className="space-y-2">
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                            <p className="text-xs text-gray-600 mb-3">
+                              Este usuario no tiene un tenant asociado. Crea uno para poder asignarle un plan.
+                            </p>
+                            <button
+                              onClick={() => handleCreateTenant(user)}
+                              disabled={creatingTenant === user.id}
+                              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm"
+                            >
+                              {creatingTenant === user.id ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                                  Creando tenant...
+                                </>
+                              ) : (
+                                <>
+                                  <UserPlus size={16} />
+                                  Crear Tenant
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
                       )}
                     </div>
                   )}
