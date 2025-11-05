@@ -211,8 +211,22 @@ Deno.serve(async (req: Request) => {
 
       const appId = internalApp.id;
 
+      console.log(`Processing ${extApp.users.length} users for ${extApp.name}`);
+
+      // Track successfully synced users
+      const successfullySyncedUsers = [];
+
       // Sync each user
       for (const user of extApp.users) {
+        // Validate email before processing
+        if (!user.email || user.email.trim() === '') {
+          console.error(`Skipping user ${user.id} for ${extApp.name}: missing email`);
+          results.errors.push(
+            `Failed to sync user ${user.name || user.id} in ${extApp.name}: missing email address`
+          );
+          continue;
+        }
+
         const userData = {
           application_id: appId,
           external_user_id: user.id,
@@ -238,15 +252,17 @@ Deno.serve(async (req: Request) => {
           results.errors.push(
             `Failed to sync user ${user.email}: ${upsertError.message}`
           );
-        } else {
-          results.total_users_synced++;
+          continue;
         }
+
+        results.total_users_synced++;
+        successfullySyncedUsers.push(user);
       }
 
-      console.log(`Synced ${extApp.users.length} users for ${extApp.name}`);
+      console.log(`Successfully synced ${successfullySyncedUsers.length} users for ${extApp.name}`);
 
-      // Create individual tenants for each user
-      for (const user of extApp.users) {
+      // Create individual tenants ONLY for successfully synced users
+      for (const user of successfullySyncedUsers) {
         // Check if tenant already exists for this user
         const { data: existingUserTenant } = await supabase
           .from("tenants")
@@ -258,15 +274,6 @@ Deno.serve(async (req: Request) => {
 
         // Create tenant if doesn't exist
         if (!existingUserTenant) {
-          // Validate email before creating tenant
-          if (!user.email || user.email.trim() === '') {
-            console.error(`Skipping tenant creation for user ${user.id}: missing email`);
-            results.errors.push(
-              `Failed to sync user ${user.name || user.id}: missing email address`
-            );
-            continue;
-          }
-
           const { data: newUserTenant, error: userTenantError } = await supabase
             .from("tenants")
             .insert({
