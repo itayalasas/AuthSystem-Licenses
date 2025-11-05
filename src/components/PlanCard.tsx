@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Plan } from '../lib/admin-api';
 import { Edit2, Trash2, Check } from 'lucide-react';
+import { ConfirmModal } from './ConfirmModal';
 
 interface PlanCardProps {
   plan: Plan;
@@ -8,37 +10,47 @@ interface PlanCardProps {
 }
 
 export function PlanCard({ plan, onEdit, onDelete }: PlanCardProps) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const maxUsers = plan.entitlements?.max_users || 0;
   const features = plan.entitlements?.features || [];
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow group">
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex-1">
-          <h3 className="font-semibold text-gray-900 text-lg">{plan.name}</h3>
-          <p className="text-sm text-gray-600 mt-1">{plan.description}</p>
+    <>
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        title="Eliminar plan"
+        message={`¿Está seguro que desea eliminar el plan "${plan.name}"? Esta acción no se puede deshacer.`}
+        onConfirm={() => {
+          setShowDeleteConfirm(false);
+          onDelete(plan.id);
+        }}
+        onCancel={() => setShowDeleteConfirm(false)}
+        type="danger"
+      />
+
+      <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow group">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex-1">
+            <h3 className="font-semibold text-gray-900 text-lg">{plan.name}</h3>
+            <p className="text-sm text-gray-600 mt-1">{plan.description}</p>
+          </div>
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={() => onEdit(plan)}
+              className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              title="Editar plan"
+            >
+              <Edit2 size={16} />
+            </button>
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              title="Eliminar plan"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
         </div>
-        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={() => onEdit(plan)}
-            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            title="Editar plan"
-          >
-            <Edit2 size={16} />
-          </button>
-          <button
-            onClick={() => {
-              if (confirm(`¿Eliminar el plan "${plan.name}"?`)) {
-                onDelete(plan.id);
-              }
-            }}
-            className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-            title="Eliminar plan"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      </div>
 
       <div className="mb-4">
         <span className="text-3xl font-bold text-gray-900">
@@ -71,5 +83,6 @@ export function PlanCard({ plan, onEdit, onDelete }: PlanCardProps) {
         )}
       </div>
     </div>
+    </>
   );
 }
