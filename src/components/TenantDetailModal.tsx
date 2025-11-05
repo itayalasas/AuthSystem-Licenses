@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { X, Building2, Package, Plus, Trash2, Edit2, Check } from 'lucide-react';
 import { AdminAPIService, type Tenant, type Plan, type Application } from '../lib/admin-api';
+import { ConfirmModal } from './ConfirmModal';
+import { useToast } from '../hooks/useToast';
 
 interface TenantDetailModalProps {
   tenant: Tenant;
@@ -19,6 +21,9 @@ export function TenantDetailModal({ tenant, onClose, onRefresh, adminApi, applic
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [startTrial, setStartTrial] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [showConfirmRevoke, setShowConfirmRevoke] = useState(false);
+  const [appToRevoke, setAppToRevoke] = useState<string>('');
+  const { showToast } = useToast();
   const [editedData, setEditedData] = useState({
     name: tenant.name,
     organization_name: tenant.organization_name || '',
@@ -48,7 +53,7 @@ export function TenantDetailModal({ tenant, onClose, onRefresh, adminApi, applic
 
   const handleGrantAccess = async () => {
     if (!selectedAppId) {
-      alert('Selecciona una aplicación');
+      showToast('Selecciona una aplicación', 'error');
       return;
     }
 
@@ -62,26 +67,32 @@ export function TenantDetailModal({ tenant, onClose, onRefresh, adminApi, applic
       setSelectedAppId('');
       setSelectedPlanId('');
       setStartTrial(false);
+      showToast('Acceso asignado exitosamente', 'success');
       loadTenantDetails();
       onRefresh();
     } catch (error) {
       console.error('Failed to grant access:', error);
-      alert('Error al asignar aplicación');
+      showToast('Error al asignar aplicación', 'error');
     }
   };
 
-  const handleRevokeAccess = async (appId: string) => {
-    if (!confirm('¿Estás seguro de revocar el acceso a esta aplicación?')) {
-      return;
-    }
+  const handleRevokeAccessClick = (appId: string) => {
+    setAppToRevoke(appId);
+    setShowConfirmRevoke(true);
+  };
 
+  const handleConfirmRevoke = async () => {
+    setShowConfirmRevoke(false);
     try {
-      await adminApi.revokeAccess(tenant.id, appId);
+      await adminApi.revokeAccess(tenant.id, appToRevoke);
+      showToast('Acceso revocado exitosamente', 'success');
       loadTenantDetails();
       onRefresh();
     } catch (error) {
       console.error('Failed to revoke access:', error);
-      alert('Error al revocar acceso');
+      showToast('Error al revocar acceso', 'error');
+    } finally {
+      setAppToRevoke('');
     }
   };
 
@@ -89,11 +100,12 @@ export function TenantDetailModal({ tenant, onClose, onRefresh, adminApi, applic
     try {
       await adminApi.updateTenant(tenant.id, editedData);
       setEditing(false);
+      showToast('Cliente actualizado exitosamente', 'success');
       loadTenantDetails();
       onRefresh();
     } catch (error) {
       console.error('Failed to update tenant:', error);
-      alert('Error al actualizar cliente');
+      showToast('Error al actualizar cliente', 'error');
     }
   };
 
@@ -112,7 +124,22 @@ export function TenantDetailModal({ tenant, onClose, onRefresh, adminApi, applic
   );
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <>
+      <ConfirmModal
+        isOpen={showConfirmRevoke}
+        title="Revocar Acceso"
+        message="¿Estás seguro de revocar el acceso a esta aplicación? El tenant perderá acceso a todos los recursos asociados."
+        confirmText="Revocar Acceso"
+        cancelText="Cancelar"
+        variant="danger"
+        onConfirm={handleConfirmRevoke}
+        onCancel={() => {
+          setShowConfirmRevoke(false);
+          setAppToRevoke('');
+        }}
+      />
+
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -285,7 +312,7 @@ export function TenantDetailModal({ tenant, onClose, onRefresh, adminApi, applic
                         </div>
                       </div>
                       <button
-                        onClick={() => handleRevokeAccess(ta.application_id)}
+                        onClick={() => handleRevokeAccessClick(ta.application_id)}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -372,5 +399,6 @@ export function TenantDetailModal({ tenant, onClose, onRefresh, adminApi, applic
         </div>
       </div>
     </div>
+    </>
   );
 }

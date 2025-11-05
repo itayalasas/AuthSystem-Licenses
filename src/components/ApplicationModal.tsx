@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { X, Copy, Check, Trash2 } from 'lucide-react';
 import { type Application } from '../lib/admin-api';
+import { ConfirmModal } from './ConfirmModal';
+import { useToast } from '../hooks/useToast';
 
 interface ApplicationModalProps {
   application?: Application;
@@ -19,6 +21,8 @@ export function ApplicationModal({ application, onClose, onSave, onDelete }: App
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [copiedApiKey, setCopiedApiKey] = useState(false);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const { showToast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +32,7 @@ export function ApplicationModal({ application, onClose, onSave, onDelete }: App
       onClose();
     } catch (error) {
       console.error('Failed to save application:', error);
-      alert('Error al guardar la aplicación');
+      showToast('Error al guardar la aplicación', 'error');
     } finally {
       setSaving(false);
     }
@@ -40,27 +44,41 @@ export function ApplicationModal({ application, onClose, onSave, onDelete }: App
     setTimeout(() => setCopiedApiKey(false), 2000);
   };
 
-  const handleDelete = async () => {
-    if (!application || !onDelete) return;
+  const handleDeleteClick = () => {
+    setShowConfirmDelete(true);
+  };
 
-    if (!confirm(`¿Estás seguro de eliminar "${application.name}"? Esta acción no se puede deshacer.`)) {
-      return;
-    }
+  const handleConfirmDelete = async () => {
+    if (!application || !onDelete) return;
 
     try {
       setDeleting(true);
+      setShowConfirmDelete(false);
       await onDelete(application.id);
+      showToast('Aplicación eliminada exitosamente', 'success');
       onClose();
     } catch (error) {
       console.error('Failed to delete application:', error);
-      alert('Error al eliminar la aplicación');
+      showToast('Error al eliminar la aplicación', 'error');
     } finally {
       setDeleting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <>
+      <ConfirmModal
+        isOpen={showConfirmDelete}
+        title="Confirmar Eliminación"
+        message={`¿Estás seguro de eliminar "${application?.name}"? Esta acción no se puede deshacer y se perderá toda la información asociada.`}
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setShowConfirmDelete(false)}
+      />
+
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full">
         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
           <h2 className="text-2xl font-bold text-gray-900">
@@ -172,7 +190,7 @@ export function ApplicationModal({ application, onClose, onSave, onDelete }: App
             {application && onDelete && (
               <button
                 type="button"
-                onClick={handleDelete}
+                onClick={handleDeleteClick}
                 disabled={saving || deleting}
                 className="px-6 border border-red-300 text-red-600 py-3 rounded-lg font-medium hover:bg-red-50 transition-colors disabled:opacity-50 flex items-center gap-2"
               >
@@ -192,5 +210,6 @@ export function ApplicationModal({ application, onClose, onSave, onDelete }: App
         </form>
       </div>
     </div>
+    </>
   );
 }

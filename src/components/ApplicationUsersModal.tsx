@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { X, Users, Mail, Calendar, Clock, ExternalLink, CreditCard, AlertCircle, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 import { Button } from './Button';
 import { AdminAPIService, ApplicationUser, License } from '../lib/admin-api';
+import { ConfirmModal } from './ConfirmModal';
+import { useToast } from '../hooks/useToast';
 
 interface ApplicationUsersModalProps {
   applicationId: string;
@@ -18,6 +20,9 @@ export function ApplicationUsersModal({
 }: ApplicationUsersModalProps) {
   const [users, setUsers] = useState<ApplicationUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showConfirmCancel, setShowConfirmCancel] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<ApplicationUser | null>(null);
+  const { showToast } = useToast();
 
   useEffect(() => {
     loadUsers();
@@ -56,40 +61,56 @@ export function ApplicationUsersModal({
 
   const handleRenewLicense = async (user: ApplicationUser) => {
     if (!user.tenant?.id || !user.subscription?.id) {
-      alert('No se puede renovar: el usuario no tiene tenant o suscripción activa');
+      showToast('No se puede renovar: el usuario no tiene tenant o suscripción activa', 'error');
       return;
     }
 
     try {
-      alert('Funcionalidad de renovación en desarrollo. Se renovará la licencia por 30 días más.');
+      showToast('Funcionalidad de renovación en desarrollo. Se renovará la licencia por 30 días más.', 'info');
     } catch (error) {
       console.error('Error al renovar licencia:', error);
-      alert('Error al renovar la licencia');
+      showToast('Error al renovar la licencia', 'error');
     }
   };
 
-  const handleCancelSubscription = async (user: ApplicationUser) => {
+  const handleCancelSubscriptionClick = (user: ApplicationUser) => {
     if (!user.subscription?.id) {
-      alert('No hay suscripción para cancelar');
+      showToast('No hay suscripción para cancelar', 'error');
       return;
     }
+    setSelectedUser(user);
+    setShowConfirmCancel(true);
+  };
 
-    const confirmed = confirm(
-      `¿Estás seguro de cancelar la suscripción de ${user.name}? Esta acción no se puede deshacer.`
-    );
-
-    if (!confirmed) return;
-
+  const handleConfirmCancel = async () => {
+    setShowConfirmCancel(false);
     try {
-      alert('Funcionalidad de cancelación en desarrollo. Se cancelará la suscripción al final del período actual.');
+      showToast('Funcionalidad de cancelación en desarrollo. Se cancelará la suscripción al final del período actual.', 'info');
     } catch (error) {
       console.error('Error al cancelar suscripción:', error);
-      alert('Error al cancelar la suscripción');
+      showToast('Error al cancelar la suscripción', 'error');
+    } finally {
+      setSelectedUser(null);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <>
+      <ConfirmModal
+        isOpen={showConfirmCancel}
+        title="Cancelar Suscripción"
+        message={`¿Estás seguro de cancelar la suscripción de ${selectedUser?.name}? La suscripción permanecerá activa hasta el final del período actual.`}
+        confirmText="Cancelar Suscripción"
+        cancelText="Volver"
+        variant="warning"
+        onConfirm={handleConfirmCancel}
+        onCancel={() => {
+          setShowConfirmCancel(false);
+          setSelectedUser(null);
+        }}
+      />
+
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden animate-scale-in flex flex-col">
         {/* Header */}
         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
@@ -298,7 +319,7 @@ export function ApplicationUsersModal({
                         </button>
                         <button
                           className="flex-1 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-100 hover:bg-red-200 rounded-lg transition-colors flex items-center justify-center gap-1.5"
-                          onClick={() => handleCancelSubscription(user)}
+                          onClick={() => handleCancelSubscriptionClick(user)}
                         >
                           <XCircle size={14} />
                           Cancelar Suscripción
@@ -337,5 +358,6 @@ export function ApplicationUsersModal({
         </div>
       </div>
     </div>
+    </>
   );
 }
