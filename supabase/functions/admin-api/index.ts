@@ -510,6 +510,37 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    if (path === "features" && method === "GET") {
+      const search = url.searchParams.get("search");
+      const category = url.searchParams.get("category");
+
+      let query = supabase
+        .from("feature_catalog")
+        .select("*")
+        .eq("active", true);
+
+      if (search) {
+        query = query.or(
+          `name.ilike.%${search}%,code.ilike.%${search}%,description.ilike.%${search}%`
+        );
+      }
+
+      if (category) {
+        query = query.eq("category", category);
+      }
+
+      const { data, error } = await query.order("category", { ascending: true });
+
+      if (error) throw error;
+
+      return new Response(
+        JSON.stringify({ success: true, data }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     return new Response(
       JSON.stringify({ success: false, error: "Route not found" }),
       {
