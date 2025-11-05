@@ -185,15 +185,16 @@ curl -X GET \
 
 ---
 
-### 3. Validation API (Sin cambios en request, response mejorado)
+### 3. Validation API (ACTUALIZADO - Usa external_app_id)
 
 **Endpoint:** `POST /validation-api/validate-user`
 
-El response ahora está simplificado y limpio (sin duplicación):
+**CAMBIO IMPORTANTE:** Ahora usa `external_app_id` en el body en lugar de `X-API-Key` en el header.
 
 **Request:**
 ```json
 {
+  "external_app_id": "app_51ecb9e2-6b3",
   "external_user_id": "user_123"
 }
 ```
@@ -250,7 +251,6 @@ El response ahora está simplificado y limpio (sin duplicación):
 
 **Headers:**
 ```
-X-API-Key: ak_f5abded75d7545458b952ad4d4aca5b9
 Content-Type: application/json
 ```
 
@@ -258,12 +258,14 @@ Content-Type: application/json
 ```bash
 curl -X POST \
   'https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/validation-api/validate-user' \
-  -H 'X-API-Key: ak_f5abded75d7545458b952ad4d4aca5b9' \
   -H 'Content-Type: application/json' \
   -d '{
+    "external_app_id": "app_51ecb9e2-6b3",
     "external_user_id": "user_123"
   }'
 ```
+
+**Nota:** Para más detalles y ejemplos de código, ver `AUTENTICACION_VALIDATION_API.md`
 
 ---
 

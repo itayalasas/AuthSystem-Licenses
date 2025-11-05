@@ -22,39 +22,37 @@ Deno.serve(async (req: Request) => {
     const url = new URL(req.url);
     const path = url.pathname.replace('/validation-api', '');
 
-    // Validate API key from application
-    const apiKey = req.headers.get('X-API-Key');
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'API key required' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Verify application
-    const { data: application } = await supabase
-      .from('applications')
-      .select('*')
-      .eq('api_key', apiKey)
-      .eq('is_active', true)
-      .maybeSingle();
-
-    if (!application) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Invalid API key' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
     // POST /validate-user - Check if user has access to this application
     if (path === '/validate-user' && req.method === 'POST') {
       const payload = await req.json();
-      const { external_user_id, user_email } = payload;
+      const { external_user_id, user_email, external_app_id } = payload;
 
       if (!external_user_id && !user_email) {
         return new Response(
           JSON.stringify({ success: false, error: 'User identifier required' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!external_app_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'external_app_id required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Verify application
+      const { data: application } = await supabase
+        .from('applications')
+        .select('*')
+        .eq('external_app_id', external_app_id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!application) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid external_app_id or application not active' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -182,12 +180,34 @@ Deno.serve(async (req: Request) => {
     // POST /validate-license - Validate a license token
     if (path === '/validate-license' && req.method === 'POST') {
       const payload = await req.json();
-      const { jti } = payload;
+      const { jti, external_app_id } = payload;
 
       if (!jti) {
         return new Response(
           JSON.stringify({ success: false, error: 'License JTI required' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!external_app_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'external_app_id required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Verify application
+      const { data: application } = await supabase
+        .from('applications')
+        .select('*')
+        .eq('external_app_id', external_app_id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!application) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid external_app_id or application not active' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -250,11 +270,27 @@ Deno.serve(async (req: Request) => {
     if (path === '/check-feature' && req.method === 'GET') {
       const jti = url.searchParams.get('jti');
       const feature = url.searchParams.get('feature');
+      const external_app_id = url.searchParams.get('external_app_id');
 
-      if (!jti || !feature) {
+      if (!jti || !feature || !external_app_id) {
         return new Response(
-          JSON.stringify({ success: false, error: 'JTI and feature required' }),
+          JSON.stringify({ success: false, error: 'JTI, feature, and external_app_id required' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Verify application
+      const { data: application } = await supabase
+        .from('applications')
+        .select('*')
+        .eq('external_app_id', external_app_id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!application) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid external_app_id or application not active' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
@@ -291,12 +327,34 @@ Deno.serve(async (req: Request) => {
     // POST /record-usage - Record usage metric
     if (path === '/record-usage' && req.method === 'POST') {
       const payload = await req.json();
-      const { tenant_id, metric, value, metadata } = payload;
+      const { tenant_id, metric, value, metadata, external_app_id } = payload;
 
       if (!tenant_id || !metric || value === undefined) {
         return new Response(
           JSON.stringify({ success: false, error: 'Tenant ID, metric, and value required' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!external_app_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'external_app_id required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Verify application
+      const { data: application } = await supabase
+        .from('applications')
+        .select('*')
+        .eq('external_app_id', external_app_id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!application) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid external_app_id or application not active' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
