@@ -352,9 +352,35 @@ Deno.serve(async (req: Request) => {
       const planId = path.split("/")[1];
       const body = await req.json();
 
+      const updateData: any = {
+        name: body.name,
+        description: body.description,
+        price: body.price,
+        currency: body.currency,
+        billing_cycle: body.billing_cycle,
+        entitlements: body.entitlements,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (body.trial_days !== undefined) {
+        updateData.trial_days = body.trial_days;
+      }
+
+      if (body.is_active !== undefined) {
+        updateData.is_active = body.is_active;
+      }
+
+      if (body.sort_order !== undefined) {
+        updateData.sort_order = body.sort_order;
+      }
+
+      if (body.application_id && body.application_id !== '') {
+        updateData.application_id = body.application_id;
+      }
+
       const { data: plan, error } = await supabase
         .from("plans")
-        .update(body)
+        .update(updateData)
         .eq("id", planId)
         .select()
         .single();
