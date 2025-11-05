@@ -75,7 +75,6 @@ Deno.serve(async (req: Request) => {
 
       if (error) throw error;
 
-      // Get user count for each application
       const appsWithUserCount = await Promise.all(
         (data || []).map(async (app) => {
           const { count } = await supabase
@@ -92,6 +91,46 @@ Deno.serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ success: true, data: appsWithUserCount }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (path.startsWith("applications/external/") && method === "GET") {
+      const externalAppId = path.split("/")[2];
+
+      const { data, error } = await supabase
+        .from("applications")
+        .select("*")
+        .eq("external_app_id", externalAppId)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!data) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Application not found" }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      const { count } = await supabase
+        .from("application_users")
+        .select("*", { count: "exact", head: true })
+        .eq("application_id", data.id);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            ...data,
+            users_count: count || 0,
+          },
+        }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
@@ -480,7 +519,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // GET /applications/:id/users - Get users of an application
     if (path.match(/^applications\/[0-9a-f-]+\/users$/) && req.method === "GET") {
       const applicationId = path.split("/")[1];
 
@@ -500,13 +538,11 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // PUT /applications/:id/assign-plan - Assign a plan to an application
     if (path.match(/^applications\/[0-9a-f-]+\/assign-plan$/) && req.method === "PUT") {
       const applicationId = path.split("/")[1];
       const body = await req.json();
       const { plan_id } = body;
 
-      // Get plan details to update max_users
       const { data: plan } = await supabase
         .from("plans")
         .select("entitlements")
@@ -515,7 +551,6 @@ Deno.serve(async (req: Request) => {
 
       const maxUsers = plan?.entitlements?.max_users || 0;
 
-      // Update application with plan
       const { data, error } = await supabase
         .from("applications")
         .update({
@@ -536,7 +571,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // DELETE /applications/:id - Delete application
     if (path.match(/^applications\/[0-9a-f-]+$/) && req.method === "DELETE") {
       const applicationId = path.split("/")[1];
 

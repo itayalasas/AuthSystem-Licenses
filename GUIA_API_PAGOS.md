@@ -3,12 +3,20 @@
 ## URLs Base
 
 ```
+Base URL Admin API: https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/admin-api
 Base URL Payment Processor: https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/payment-processor
 Base URL Payment Manager: https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/payment-manager
 ```
 
 ## Headers Requeridos
 
+### Para Admin API:
+```
+X-Admin-Token: admin_001
+Content-Type: application/json
+```
+
+### Para Payment APIs:
 ```
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZleW10aHVmbWZxaHh4eHpmbWZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIyMjY2MjUsImV4cCI6MjA3NzgwMjYyNX0.jAhRpp4ulEUuhTqEdMrcI2xhaMOJYA1RPnd-BDs2YIo
 Content-Type: application/json
@@ -16,7 +24,60 @@ Content-Type: application/json
 
 ---
 
-## 1. Consultar Estado de Suscripción
+## 1. Consultar Aplicación por External App ID
+
+### Descripción
+Obtiene la información completa de una aplicación usando su External App ID (el ID de tu sistema externo).
+
+### Request
+
+**cURL:**
+```bash
+curl -X GET \
+  'https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/admin-api/applications/external/9acde27f-74d3-465e-aaec-94ad46faa881' \
+  -H 'X-Admin-Token: admin_001' \
+  -H 'Content-Type: application/json'
+```
+
+**Postman:**
+- Method: `GET`
+- URL: `https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/admin-api/applications/external/9acde27f-74d3-465e-aaec-94ad46faa881`
+- Headers:
+  - `X-Admin-Token`: `admin_001`
+  - `Content-Type`: `application/json`
+
+### Response (200 OK)
+```json
+{
+  "success": true,
+  "data": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "name": "Creador Apis",
+    "slug": "creador-apis",
+    "external_app_id": "9acde27f-74d3-465e-aaec-94ad46faa881",
+    "api_key": "ak_6f446cec5459486b7f8df385bbb903b",
+    "webhook_url": "dashboard.authsystem.local",
+    "max_users": 0,
+    "plan_id": null,
+    "settings": {},
+    "created_at": "2025-11-05T10:00:00.000Z",
+    "updated_at": "2025-11-05T10:00:00.000Z",
+    "users_count": 0
+  }
+}
+```
+
+### Response (404 Not Found)
+```json
+{
+  "success": false,
+  "error": "Application not found"
+}
+```
+
+---
+
+## 2. Consultar Estado de Suscripción
 
 ### Descripción
 Obtiene el estado completo de una suscripción, incluyendo información de trial, pagos pendientes y historial.
