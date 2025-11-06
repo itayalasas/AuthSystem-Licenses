@@ -121,32 +121,51 @@ export function FeatureModal({
 
   const handleSubmitRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!requestForm.name.trim() || !requestForm.requested_by.trim()) {
+    if (!requestForm.name.trim()) {
       return;
     }
 
     try {
       setSubmittingRequest(true);
 
-      const { error } = await supabase
-        .from('feature_requests')
+      const featureCode = requestForm.name.toLowerCase().replace(/\s+/g, '_');
+
+      const { data: newFeature, error } = await supabase
+        .from('feature_catalog')
         .insert({
           name: requestForm.name.trim(),
-          code: requestForm.name.toLowerCase().replace(/\s+/g, '_'),
-          description: requestForm.description.trim() || null,
+          code: featureCode,
+          description: requestForm.description.trim() || 'Funcionalidad personalizada',
+          value_type: 'boolean',
           category: requestForm.category.trim() || 'other',
-          requested_by: requestForm.requested_by.trim(),
-          status: 'pending',
-        });
+          default_value: 'true',
+          active: true,
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
-      alert('¡Solicitud enviada! El equipo revisará tu solicitud pronto.');
-      handleReset();
-      onCancel();
+      alert('¡Funcionalidad creada exitosamente! Ahora puedes agregarla a tus planes.');
+
+      await loadCatalog();
+
+      if (newFeature) {
+        setSelectedFeature(newFeature);
+        setSearch(newFeature.name);
+        setValue('true');
+      }
+
+      setShowRequestForm(false);
+      setRequestForm({
+        name: '',
+        description: '',
+        category: '',
+        requested_by: '',
+      });
     } catch (error) {
-      console.error('Error submitting request:', error);
-      alert('Error al enviar la solicitud. Por favor intenta de nuevo.');
+      console.error('Error creating feature:', error);
+      alert('Error al crear la funcionalidad. Por favor intenta de nuevo.');
     } finally {
       setSubmittingRequest(false);
     }
@@ -293,7 +312,7 @@ export function FeatureModal({
                   className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
                 >
                   <Plus className="w-4 h-4" />
-                  Solicitar esta funcionalidad
+                  Crear esta funcionalidad
                 </button>
               </div>
             )}
@@ -342,8 +361,11 @@ export function FeatureModal({
             <div className="border border-green-200 rounded-lg p-6 bg-green-50">
               <h4 className="font-bold text-green-900 mb-4 flex items-center gap-2">
                 <Plus className="w-5 h-5" />
-                Solicitar Nueva Funcionalidad
+                Crear Nueva Funcionalidad
               </h4>
+              <p className="text-sm text-green-800 mb-4">
+                La funcionalidad se agregará automáticamente al catálogo y estará disponible de inmediato.
+              </p>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -387,17 +409,11 @@ export function FeatureModal({
                     <option value="other">Otra</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tu Email *
-                  </label>
-                  <input
-                    type="email"
-                    value={requestForm.requested_by}
-                    onChange={(e) => setRequestForm(prev => ({ ...prev, requested_by: e.target.value }))}
-                    placeholder="tu@email.com"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-xs text-blue-800">
+                    <strong>Nota:</strong> Se creará como tipo booleano (habilitado/deshabilitado) por defecto.
+                    Puedes modificarla desde el catálogo si necesitas otro tipo.
+                  </p>
                 </div>
                 <div className="flex gap-3 pt-2">
                   <button
@@ -410,10 +426,10 @@ export function FeatureModal({
                   <button
                     type="button"
                     onClick={handleSubmitRequest}
-                    disabled={!requestForm.name.trim() || !requestForm.requested_by.trim() || submittingRequest}
+                    disabled={!requestForm.name.trim() || submittingRequest}
                     className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {submittingRequest ? 'Enviando...' : 'Enviar Solicitud'}
+                    {submittingRequest ? 'Creando...' : 'Crear Funcionalidad'}
                   </button>
                 </div>
               </div>
