@@ -20,7 +20,11 @@ Deno.serve(async (req: Request) => {
   try {
     const accessKey = req.headers.get("X-Access-Key");
     
+    console.log("Received access key:", accessKey ? "Present" : "Missing");
+    console.log("Expected access key:", VALID_ACCESS_KEY);
+    
     if (accessKey !== VALID_ACCESS_KEY) {
+      console.error("Invalid access key provided");
       return new Response(
         JSON.stringify({ error: "Invalid access key" }),
         {
@@ -51,6 +55,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    console.log("Configuration fetched successfully");
     return new Response(
       JSON.stringify(data),
       {
