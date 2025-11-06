@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ConfigService } from '../lib/config';
-import { Loader2, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
+import { initializeSupabase } from '../lib/supabase';
+import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 
 interface ConfigLoaderProps {
   children: React.ReactNode;
@@ -16,17 +17,13 @@ export function ConfigLoader({ children }: ConfigLoaderProps) {
   }, [retryCount]);
 
   async function loadConfig() {
-    const accessKey = ConfigService.getAccessKey();
-
-    if (!accessKey) {
-      setStatus('success');
-      return;
-    }
-
     try {
       setStatus('loading');
       setError(null);
+
       await ConfigService.initialize();
+      await initializeSupabase();
+
       setStatus('success');
     } catch (err) {
       console.error('Failed to load configuration:', err);

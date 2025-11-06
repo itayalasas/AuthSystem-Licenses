@@ -26,19 +26,19 @@ class AuthService {
   private static USER_KEY = 'auth_user';
 
   private static getAuthUrl(): string {
-    return ConfigService.getVariable('VITE_AUTH_URL') || import.meta.env.VITE_AUTH_URL || '';
+    return ConfigService.getVariable('VITE_AUTH_URL') || '';
   }
 
   private static getAppId(): string {
-    return ConfigService.getVariable('VITE_AUTH_APP_ID') || import.meta.env.VITE_AUTH_APP_ID || '';
+    return ConfigService.getVariable('VITE_AUTH_APP_ID') || '';
   }
 
   private static getApiKey(): string {
-    return ConfigService.getVariable('VITE_AUTH_API_KEY') || import.meta.env.VITE_AUTH_API_KEY || '';
+    return ConfigService.getVariable('VITE_AUTH_API_KEY') || '';
   }
 
   private static getRedirectUri(): string {
-    return ConfigService.getVariable('VITE_REDIRECT_URI') || import.meta.env.VITE_REDIRECT_URI || '';
+    return ConfigService.getVariable('VITE_REDIRECT_URI') || '';
   }
 
   static buildAuthUrl(type: 'login' | 'register'): string {
