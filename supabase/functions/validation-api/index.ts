@@ -184,6 +184,37 @@ Deno.serve(async (req: Request) => {
         }
       }
 
+      // Get available plans for upgrade/downgrade
+      let availablePlans = [];
+      if (subscription && subscription.plan) {
+        const { data: otherPlans } = await supabase
+          .from('plans')
+          .select('id, name, description, price, currency, billing_cycle, entitlements, is_active')
+          .eq('application_id', application.id)
+          .eq('is_active', true)
+          .neq('id', subscription.plan_id)
+          .order('price', { ascending: true });
+
+        if (otherPlans && otherPlans.length > 0) {
+          availablePlans = await Promise.all(
+            otherPlans.map(async (plan) => {
+              const enriched = await enrichEntitlements(supabase, plan.entitlements);
+              return {
+                id: plan.id,
+                name: plan.name,
+                description: plan.description,
+                price: plan.price,
+                currency: plan.currency,
+                billing_cycle: plan.billing_cycle,
+                entitlements: enriched,
+                is_upgrade: plan.price > subscription.plan.price,
+                price_difference: plan.price - subscription.plan.price,
+              };
+            })
+          );
+        }
+      }
+
       return new Response(
         JSON.stringify({
           success: true,
@@ -209,6 +240,7 @@ Deno.serve(async (req: Request) => {
             entitlements: enrichedEntitlements,
           } : null,
           license: licenseData,
+          available_plans: availablePlans,
           reason: isValid ? undefined : reason,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
