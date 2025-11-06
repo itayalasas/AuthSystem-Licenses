@@ -75,11 +75,11 @@ export function ApplicationsView({ applications, plans, onAdd, onEdit, onDelete,
                       e.stopPropagation();
                       onViewPlans(app);
                     }}
-                    className="flex items-center gap-2 text-xs text-gray-600 hover:text-gray-900 hover:underline w-full"
+                    className="flex items-center gap-2 text-xs text-green-600 hover:text-green-700 hover:underline w-full font-medium"
                   >
                     <Package size={14} className="flex-shrink-0" />
                     <span>
-                      {appPlans.length} {appPlans.length === 1 ? 'plan' : 'planes'}
+                      {appPlans.length} {appPlans.length === 1 ? 'plan' : 'planes'} - Ver Planes
                     </span>
                   </button>
 
@@ -97,7 +97,7 @@ export function ApplicationsView({ applications, plans, onAdd, onEdit, onDelete,
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="grid grid-cols-4 gap-2 pt-2 border-t border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -108,7 +108,19 @@ export function ApplicationsView({ applications, plans, onAdd, onEdit, onDelete,
                     icon={<Eye size={14} />}
                     className="text-blue-600 hover:bg-blue-50"
                   >
-                    Ver
+                    Usuarios
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onViewPlans(app);
+                    }}
+                    icon={<Package size={14} />}
+                    className="text-green-600 hover:bg-green-50"
+                  >
+                    Planes
                   </Button>
                   <Button
                     variant="ghost"
