@@ -7,6 +7,7 @@ import {
   type DashboardStats,
   type Plan,
 } from '../lib/admin-api';
+import { ConfigService } from '../lib/config';
 import {
   Users,
   Building2,
@@ -290,6 +291,11 @@ export function Dashboard() {
   };
 
   const handleSyncMercadoPago = async (planId: string) => {
+    if (!ConfigService.isMercadoPagoConfigured()) {
+      showError('MercadoPago no está configurado. Por favor configura las variables MERCADOPAGO_ACCESS_TOKEN y MERCADOPAGO_BACK_URL en la API de configuración.');
+      return;
+    }
+
     try {
       await adminApi.syncPlanWithMercadoPago(planId);
       success('Plan sincronizado con MercadoPago exitosamente');

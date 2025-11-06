@@ -136,6 +136,23 @@ class ConfigService {
     this.clearCache();
     return await this.fetchConfig();
   }
+
+  static getMercadoPagoApiUrl(): string {
+    return this.getVariable('MERCADOPAGO_API_URL') || 'https://api.mercadopago.com/preapproval_plan';
+  }
+
+  static getMercadoPagoAccessToken(): string | undefined {
+    return this.getVariable('MERCADOPAGO_ACCESS_TOKEN');
+  }
+
+  static getMercadoPagoBackUrl(): string {
+    return this.getVariable('MERCADOPAGO_BACK_URL') || 'https://www.yoursite.com';
+  }
+
+  static isMercadoPagoConfigured(): boolean {
+    const token = this.getMercadoPagoAccessToken();
+    return !!token && token !== 'your_mercadopago_access_token_here';
+  }
 }
 
 export { ConfigService };
