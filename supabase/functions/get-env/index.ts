@@ -42,15 +42,33 @@ Deno.serve(async (req: Request) => {
     const { data, error } = await supabase
       .from("app_config")
       .select("*")
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error("Error fetching config:", error);
       return new Response(
-        JSON.stringify({ error: "Failed to fetch configuration" }),
+        JSON.stringify({ error: "Failed to fetch configuration", details: error.message }),
         {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (!data) {
+      console.warn("No configuration found in database");
+      return new Response(
+        JSON.stringify({
+          project_name: "Default Config",
+          description: "No configuration found",
+          variables: {},
+          updated_at: new Date().toISOString()
+        }),
+        {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
         }
       );
     }

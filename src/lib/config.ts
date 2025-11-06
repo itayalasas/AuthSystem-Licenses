@@ -26,7 +26,16 @@ class ConfigService {
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Response not OK:', response.status, errorText);
         throw new Error(`Failed to fetch config: ${response.statusText}`);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error('Invalid content-type or non-JSON response:', contentType, responseText);
+        throw new Error('Invalid response format from config API');
       }
 
       const data: EnvConfig = await response.json();
