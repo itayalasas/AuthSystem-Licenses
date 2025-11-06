@@ -875,20 +875,13 @@ Deno.serve(async (req: Request) => {
       const frequency = plan.billing_cycle === "annual" ? 12 : 1;
       const repetitions = plan.billing_cycle === "annual" ? 1 : 12;
 
-      const mercadopagoPayload = {
+      const mercadopagoPayload: any = {
         reason: plan.name,
         auto_recurring: {
           frequency: frequency,
           frequency_type: frequencyType,
-          repetitions: repetitions,
-          billing_day: 10,
-          billing_day_proportional: true,
-          transaction_amount: plan.price,
+          transaction_amount: parseFloat(plan.price),
           currency_id: plan.currency || "UYU"
-        },
-        payment_methods_allowed: {
-          payment_types: [{}],
-          payment_methods: [{}]
         },
         back_url: mercadopagoBackUrl
       };
@@ -913,14 +906,24 @@ Deno.serve(async (req: Request) => {
         if (!mpResponse.ok) {
           const errorData = await mpResponse.text();
           console.error("MercadoPago API Error:", errorData);
+          console.error("Request payload:", JSON.stringify(mercadopagoPayload, null, 2));
+
+          let parsedError;
+          try {
+            parsedError = JSON.parse(errorData);
+          } catch {
+            parsedError = errorData;
+          }
+
           return new Response(
             JSON.stringify({
               success: false,
               error: `MercadoPago API error: ${mpResponse.status}`,
-              details: errorData
+              details: parsedError,
+              payload: mercadopagoPayload
             }),
             {
-              status: mpResponse.status,
+              status: 400,
               headers: { ...corsHeaders, "Content-Type": "application/json" },
             }
           );

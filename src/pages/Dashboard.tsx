@@ -300,8 +300,10 @@ export function Dashboard() {
       await adminApi.syncPlanWithMercadoPago(planId);
       success('Plan sincronizado con MercadoPago exitosamente');
       await refreshPlans();
-    } catch (err) {
-      showError(err instanceof Error ? err.message : 'Error al sincronizar con MercadoPago');
+    } catch (err: any) {
+      console.error('MercadoPago sync error:', err);
+      const errorMessage = err?.details?.message || err?.message || 'Error al sincronizar con MercadoPago';
+      showError(`${errorMessage}${err?.details ? ` - ${JSON.stringify(err.details)}` : ''}`);
     }
   };
 
