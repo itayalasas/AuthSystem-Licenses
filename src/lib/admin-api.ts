@@ -560,6 +560,7 @@ class AdminAPIService {
     value_type?: string;
     category?: string;
     default_value?: string;
+    unit?: string;
     active?: boolean;
   }): Promise<FeatureCatalog> {
     const response = await fetch(`${getAdminApiUrl()}/features`, {

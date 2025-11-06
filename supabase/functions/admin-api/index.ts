@@ -743,7 +743,7 @@ Deno.serve(async (req: Request) => {
 
     if (path === "features" && method === "POST") {
       const payload = await req.json();
-      const { name, code, description, value_type, category, default_value, active } = payload;
+      const { name, code, description, value_type, category, default_value, unit, active } = payload;
 
       if (!name || !code) {
         return new Response(
@@ -771,17 +771,23 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      const insertData: any = {
+        name,
+        code,
+        description: description || 'Funcionalidad personalizada',
+        value_type: value_type || 'boolean',
+        category: category || 'other',
+        default_value: default_value || 'true',
+        active: active !== undefined ? active : true,
+      };
+
+      if (unit) {
+        insertData.unit = unit;
+      }
+
       const { data, error } = await supabase
         .from("feature_catalog")
-        .insert({
-          name,
-          code,
-          description: description || 'Funcionalidad personalizada',
-          value_type: value_type || 'boolean',
-          category: category || 'other',
-          default_value: default_value || 'true',
-          active: active !== undefined ? active : true,
-        })
+        .insert(insertData)
         .select()
         .single();
 

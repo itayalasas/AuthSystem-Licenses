@@ -32,6 +32,9 @@ export function FeatureModal({
     name: '',
     description: '',
     category: '',
+    value_type: 'boolean',
+    default_value: 'true',
+    unit: '',
     requested_by: '',
   });
   const [submittingRequest, setSubmittingRequest] = useState(false);
@@ -133,15 +136,21 @@ export function FeatureModal({
 
       const featureCode = requestForm.name.toLowerCase().replace(/\s+/g, '_');
 
-      const newFeature = await adminApi.createFeature({
+      const featureData: any = {
         name: requestForm.name.trim(),
         code: featureCode,
         description: requestForm.description.trim() || 'Funcionalidad personalizada',
-        value_type: 'boolean',
+        value_type: requestForm.value_type || 'boolean',
         category: requestForm.category.trim() || 'other',
-        default_value: 'true',
+        default_value: requestForm.default_value || (requestForm.value_type === 'number' ? '0' : 'true'),
         active: true,
-      });
+      };
+
+      if (requestForm.unit && requestForm.value_type === 'number') {
+        featureData.unit = requestForm.unit.trim();
+      }
+
+      const newFeature = await adminApi.createFeature(featureData);
 
       showToast('Funcionalidad creada exitosamente', 'success');
 
@@ -158,6 +167,9 @@ export function FeatureModal({
         name: '',
         description: '',
         category: '',
+        value_type: 'boolean',
+        default_value: 'true',
+        unit: '',
         requested_by: '',
       });
     } catch (error) {
@@ -406,10 +418,67 @@ export function FeatureModal({
                     <option value="other">Otra</option>
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tipo de Valor
+                  </label>
+                  <select
+                    value={requestForm.value_type}
+                    onChange={(e) => {
+                      const newType = e.target.value;
+                      setRequestForm(prev => ({
+                        ...prev,
+                        value_type: newType,
+                        default_value: newType === 'number' ? '0' : newType === 'boolean' ? 'true' : ''
+                      }));
+                    }}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="boolean">Booleano (Sí/No)</option>
+                    <option value="number">Número (Límites)</option>
+                    <option value="text">Texto</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Valor por Defecto
+                  </label>
+                  {requestForm.value_type === 'boolean' ? (
+                    <select
+                      value={requestForm.default_value}
+                      onChange={(e) => setRequestForm(prev => ({ ...prev, default_value: e.target.value }))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    >
+                      <option value="true">Habilitado (true)</option>
+                      <option value="false">Deshabilitado (false)</option>
+                    </select>
+                  ) : (
+                    <input
+                      type={requestForm.value_type === 'number' ? 'number' : 'text'}
+                      value={requestForm.default_value}
+                      onChange={(e) => setRequestForm(prev => ({ ...prev, default_value: e.target.value }))}
+                      placeholder={requestForm.value_type === 'number' ? 'Ej: 100' : 'Ej: valor por defecto'}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  )}
+                </div>
+                {requestForm.value_type === 'number' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Unidad (opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={requestForm.unit}
+                      onChange={(e) => setRequestForm(prev => ({ ...prev, unit: e.target.value }))}
+                      placeholder="Ej: usuarios, GB, llamadas/mes"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                )}
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                   <p className="text-xs text-blue-800">
-                    <strong>Nota:</strong> Se creará como tipo booleano (habilitado/deshabilitado) por defecto.
-                    Puedes modificarla desde el catálogo si necesitas otro tipo.
+                    <strong>Nota:</strong> La funcionalidad se creará con la configuración especificada y estará disponible inmediatamente.
                   </p>
                 </div>
                 <div className="flex gap-3 pt-2">
