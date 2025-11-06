@@ -1,4 +1,4 @@
-const ENV_API_URL = 'https://ffihaeatoundrjzgtpzk.supabase.co/functions/v1/get-env';
+const ENV_API_URL = 'https://veymthufmfqhxxxzfmfi.supabase.co/functions/v1/get-env';
 const ACCESS_KEY = '033b6f38b0c5b902c90dbb1f371c389f967a0afa871028da2ab5657062cab866';
 
 interface EnvConfig {

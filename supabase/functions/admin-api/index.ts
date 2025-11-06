@@ -9,6 +9,25 @@ const corsHeaders = {
 
 const ADMIN_TOKEN = "admin_001";
 
+async function getConfigFromDatabase(supabase: any): Promise<Record<string, string>> {
+  try {
+    const { data, error } = await supabase
+      .from("app_config")
+      .select("variables")
+      .single();
+
+    if (error || !data) {
+      console.error("Error fetching config from database:", error);
+      return {};
+    }
+
+    return data.variables || {};
+  } catch (err) {
+    console.error("Error in getConfigFromDatabase:", err);
+    return {};
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -833,13 +852,18 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const mercadopagoApiUrl = Deno.env.get("MERCADOPAGO_API_URL") || "https://api.mercadopago.com/preapproval_plan";
-      const mercadopagoAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
-      const mercadopagoBackUrl = Deno.env.get("MERCADOPAGO_BACK_URL") || "https://www.yoursite.com";
+      const config = await getConfigFromDatabase(supabase);
 
-      if (!mercadopagoAccessToken) {
+      const mercadopagoApiUrl = config.MERCADOPAGO_API_URL || "https://api.mercadopago.com/preapproval_plan";
+      const mercadopagoAccessToken = config.MERCADOPAGO_ACCESS_TOKEN;
+      const mercadopagoBackUrl = config.MERCADOPAGO_BACK_URL || "https://www.yoursite.com";
+
+      if (!mercadopagoAccessToken || mercadopagoAccessToken === "your_mercadopago_access_token_here") {
         return new Response(
-          JSON.stringify({ success: false, error: "MercadoPago access token not configured" }),
+          JSON.stringify({
+            success: false,
+            error: "MercadoPago access token not configured. Please configure it in the app_config table."
+          }),
           {
             status: 500,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
