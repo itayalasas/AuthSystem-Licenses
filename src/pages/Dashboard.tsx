@@ -103,6 +103,41 @@ export function Dashboard() {
     }
   };
 
+  const refreshTenants = async () => {
+    try {
+      const [tenantsData, statsData] = await Promise.all([
+        adminApi.getTenants(),
+        adminApi.getStats(),
+      ]);
+      setTenants(tenantsData);
+      setStats(statsData);
+    } catch (err) {
+      console.error('Failed to refresh tenants:', err);
+    }
+  };
+
+  const refreshApplications = async () => {
+    try {
+      const [appsData, statsData] = await Promise.all([
+        adminApi.getApplications(),
+        adminApi.getStats(),
+      ]);
+      setApplications(appsData);
+      setStats(statsData);
+    } catch (err) {
+      console.error('Failed to refresh applications:', err);
+    }
+  };
+
+  const refreshPlans = async () => {
+    try {
+      const plansData = await adminApi.getPlans();
+      setPlans(plansData);
+    } catch (err) {
+      console.error('Failed to refresh plans:', err);
+    }
+  };
+
   const handleCreateTenant = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -119,7 +154,7 @@ export function Dashboard() {
 
       setShowCreateTenantModal(false);
       success('Cliente creado exitosamente');
-      await loadDashboardData();
+      await refreshTenants();
     } catch (err) {
       console.error('Failed to create tenant:', err);
       showError('Error al crear el cliente');
@@ -136,7 +171,7 @@ export function Dashboard() {
       setShowApplicationModal(false);
       setSelectedApplication(null);
       success('Aplicación creada exitosamente');
-      await loadDashboardData();
+      await refreshApplications();
     } catch (err) {
       showError('Error al crear la aplicación');
     }
@@ -150,7 +185,7 @@ export function Dashboard() {
       setShowApplicationModal(false);
       setSelectedApplication(null);
       success('Aplicación actualizada exitosamente');
-      await loadDashboardData();
+      await refreshApplications();
     } catch (err) {
       showError('Error al actualizar la aplicación');
     }
@@ -160,7 +195,7 @@ export function Dashboard() {
     try {
       await adminApi.deleteApplication(applicationId);
       success('Aplicación eliminada exitosamente');
-      await loadDashboardData();
+      await refreshApplications();
     } catch (err) {
       showError('Error al eliminar la aplicación');
     }
@@ -189,7 +224,7 @@ export function Dashboard() {
           `${summary.total_users_synced} usuarios, ${summary.total_tenants_created} clientes creados, ` +
           `${summary.total_relationships_created} relaciones establecidas`
         );
-        await loadDashboardData();
+        await Promise.all([refreshApplications(), refreshTenants()]);
       } else {
         showError(`Error en la sincronización: ${result.error}`);
       }
@@ -207,7 +242,7 @@ export function Dashboard() {
       setShowPlanModal(false);
       setSelectedPlan(null);
       success('Plan creado exitosamente');
-      await loadDashboardData();
+      await refreshPlans();
     } catch (err) {
       showError('Error al crear el plan');
     }
@@ -224,7 +259,7 @@ export function Dashboard() {
     try {
       await adminApi.assignExistingPlanToApplication(planId, selectedAppForPlans.id);
       success('Plan asignado exitosamente');
-      await loadDashboardData();
+      await refreshPlans();
     } catch (err) {
       showError('Error al asignar el plan');
     }
@@ -238,7 +273,7 @@ export function Dashboard() {
       setShowPlanModal(false);
       setSelectedPlan(null);
       success('Plan actualizado exitosamente');
-      await loadDashboardData();
+      await refreshPlans();
     } catch (err) {
       showError('Error al actualizar el plan');
     }
@@ -248,7 +283,7 @@ export function Dashboard() {
     try {
       await adminApi.deletePlan(planId);
       success('Plan eliminado exitosamente');
-      await loadDashboardData();
+      await refreshPlans();
     } catch (err) {
       showError('Error al eliminar el plan');
     }
@@ -575,7 +610,7 @@ export function Dashboard() {
           adminApi={adminApi}
           onClose={() => setSelectedTenant(null)}
           onUpdate={() => {
-            loadDashboardData();
+            refreshTenants();
             success('Cliente actualizado exitosamente');
           }}
         />
