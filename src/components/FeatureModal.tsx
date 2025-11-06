@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Search, Plus } from 'lucide-react';
 import type { FeatureCatalog } from '../lib/admin-api';
 import { supabase } from '../lib/supabase';
+import { useToast } from '../hooks/useToast';
 
 interface FeatureModalProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ export function FeatureModal({
   existingFeature,
   adminApi,
 }: FeatureModalProps) {
+  const { showToast } = useToast();
   const [search, setSearch] = useState('');
   const [selectedFeature, setSelectedFeature] = useState<FeatureCatalog | null>(null);
   const [value, setValue] = useState<string>('');
@@ -122,6 +124,7 @@ export function FeatureModal({
   const handleSubmitRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!requestForm.name.trim()) {
+      showToast('Por favor ingresa el nombre de la funcionalidad', 'error');
       return;
     }
 
@@ -130,23 +133,35 @@ export function FeatureModal({
 
       const featureCode = requestForm.name.toLowerCase().replace(/\s+/g, '_');
 
-      const { data: newFeature, error } = await supabase
-        .from('feature_catalog')
-        .insert({
-          name: requestForm.name.trim(),
-          code: featureCode,
-          description: requestForm.description.trim() || 'Funcionalidad personalizada',
-          value_type: 'boolean',
-          category: requestForm.category.trim() || 'other',
-          default_value: 'true',
-          active: true,
-        })
-        .select()
-        .single();
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-api/features`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: requestForm.name.trim(),
+            code: featureCode,
+            description: requestForm.description.trim() || 'Funcionalidad personalizada',
+            value_type: 'boolean',
+            category: requestForm.category.trim() || 'other',
+            default_value: 'true',
+            active: true,
+          }),
+        }
+      );
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Error al crear la funcionalidad');
+      }
 
-      alert('¡Funcionalidad creada exitosamente! Ahora puedes agregarla a tus planes.');
+      const result = await response.json();
+      const newFeature = result.data;
+
+      showToast('Funcionalidad creada exitosamente', 'success');
 
       await loadCatalog();
 
@@ -165,7 +180,7 @@ export function FeatureModal({
       });
     } catch (error) {
       console.error('Error creating feature:', error);
-      alert('Error al crear la funcionalidad. Por favor intenta de nuevo.');
+      showToast(error instanceof Error ? error.message : 'Error al crear la funcionalidad', 'error');
     } finally {
       setSubmittingRequest(false);
     }

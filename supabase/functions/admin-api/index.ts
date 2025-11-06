@@ -741,6 +741,73 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    if (path === "features" && method === "POST") {
+      const payload = await req.json();
+      const { name, code, description, value_type, category, default_value, active } = payload;
+
+      if (!name || !code) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Name and code are required" }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      const { data: existingFeature } = await supabase
+        .from("feature_catalog")
+        .select("code")
+        .eq("code", code)
+        .maybeSingle();
+
+      if (existingFeature) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Una funcionalidad con este código ya existe" }),
+          {
+            status: 409,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      const { data, error } = await supabase
+        .from("feature_catalog")
+        .insert({
+          name,
+          code,
+          description: description || 'Funcionalidad personalizada',
+          value_type: value_type || 'boolean',
+          category: category || 'other',
+          default_value: default_value || 'true',
+          active: active !== undefined ? active : true,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        return new Response(
+          JSON.stringify({ success: false, error: error.message }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data,
+          message: "Funcionalidad creada exitosamente"
+        }),
+        {
+          status: 201,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     return new Response(
       JSON.stringify({ success: false, error: "Route not found" }),
       {
