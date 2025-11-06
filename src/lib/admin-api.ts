@@ -552,6 +552,29 @@ class AdminAPIService {
 
     return result.data;
   }
+
+  async createFeature(data: {
+    name: string;
+    code: string;
+    description?: string;
+    value_type?: string;
+    category?: string;
+    default_value?: string;
+    active?: boolean;
+  }): Promise<FeatureCatalog> {
+    const response = await fetch(`${getAdminApiUrl()}/features`, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify(data),
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to create feature');
+    }
+
+    return result.data;
+  }
 }
 
 export { AdminAPIService };

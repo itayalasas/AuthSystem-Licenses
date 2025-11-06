@@ -133,33 +133,15 @@ export function FeatureModal({
 
       const featureCode = requestForm.name.toLowerCase().replace(/\s+/g, '_');
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-api/features`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            name: requestForm.name.trim(),
-            code: featureCode,
-            description: requestForm.description.trim() || 'Funcionalidad personalizada',
-            value_type: 'boolean',
-            category: requestForm.category.trim() || 'other',
-            default_value: 'true',
-            active: true,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Error al crear la funcionalidad');
-      }
-
-      const result = await response.json();
-      const newFeature = result.data;
+      const newFeature = await adminApi.createFeature({
+        name: requestForm.name.trim(),
+        code: featureCode,
+        description: requestForm.description.trim() || 'Funcionalidad personalizada',
+        value_type: 'boolean',
+        category: requestForm.category.trim() || 'other',
+        default_value: 'true',
+        active: true,
+      });
 
       showToast('Funcionalidad creada exitosamente', 'success');
 
