@@ -8,22 +8,26 @@ const corsHeaders = {
 };
 
 const ADMIN_TOKEN = "admin_001";
+const ENV_API_URL = 'https://ffihaeatoundrjzgtpzk.supabase.co/functions/v1/get-env';
+const ACCESS_KEY = '033b6f38b0c5b902c90dbb1f371c389f967a0afa871028da2ab5657062cab866';
 
-async function getConfigFromDatabase(supabase: any): Promise<Record<string, string>> {
+async function getConfigFromAPI(): Promise<Record<string, string>> {
   try {
-    const { data, error } = await supabase
-      .from("app_config")
-      .select("variables")
-      .single();
+    const response = await fetch(ENV_API_URL, {
+      headers: {
+        'X-Access-Key': ACCESS_KEY,
+      },
+    });
 
-    if (error || !data) {
-      console.error("Error fetching config from database:", error);
+    if (!response.ok) {
+      console.error('Failed to fetch config from API:', response.status);
       return {};
     }
 
+    const data = await response.json();
     return data.variables || {};
   } catch (err) {
-    console.error("Error in getConfigFromDatabase:", err);
+    console.error("Error fetching config from API:", err);
     return {};
   }
 }
@@ -852,7 +856,7 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const config = await getConfigFromDatabase(supabase);
+      const config = await getConfigFromAPI();
 
       const mercadopagoApiUrl = config.MERCADOPAGO_API_URL || "https://api.mercadopago.com/preapproval_plan";
       const mercadopagoAccessToken = config.MERCADOPAGO_ACCESS_TOKEN;
