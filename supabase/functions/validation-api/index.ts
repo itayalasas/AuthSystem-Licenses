@@ -189,7 +189,7 @@ Deno.serve(async (req: Request) => {
       if (subscription && subscription.plan) {
         const { data: otherPlans } = await supabase
           .from('plans')
-          .select('id, name, description, price, currency, billing_cycle, entitlements, is_active')
+          .select('id, name, description, price, currency, billing_cycle, entitlements, is_active, mp_init_point, mp_back_url, mp_preapproval_plan_id, mp_status')
           .eq('application_id', application.id)
           .eq('is_active', true)
           .neq('id', subscription.plan_id)
@@ -209,6 +209,10 @@ Deno.serve(async (req: Request) => {
                 entitlements: enriched,
                 is_upgrade: plan.price > subscription.plan.price,
                 price_difference: plan.price - subscription.plan.price,
+                mp_init_point: plan.mp_init_point,
+                mp_back_url: plan.mp_back_url,
+                mp_preapproval_plan_id: plan.mp_preapproval_plan_id,
+                mp_status: plan.mp_status,
               };
             })
           );
@@ -238,6 +242,10 @@ Deno.serve(async (req: Request) => {
             period_start: subscription.period_start,
             period_end: subscription.period_end,
             entitlements: enrichedEntitlements,
+            mp_init_point: subscription.plan?.mp_init_point,
+            mp_back_url: subscription.plan?.mp_back_url,
+            mp_preapproval_plan_id: subscription.plan?.mp_preapproval_plan_id,
+            mp_status: subscription.plan?.mp_status,
           } : null,
           license: licenseData,
           available_plans: availablePlans,

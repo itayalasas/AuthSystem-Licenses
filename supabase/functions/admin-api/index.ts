@@ -814,6 +814,155 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    if (path.match(/^plans\/[0-9a-f-]+\/sync-mercadopago$/) && method === "POST") {
+      const planId = path.split("/")[1];
+
+      const { data: plan, error: planError } = await supabase
+        .from("plans")
+        .select("*")
+        .eq("id", planId)
+        .single();
+
+      if (planError || !plan) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Plan not found" }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      const mercadopagoApiUrl = Deno.env.get("MERCADOPAGO_API_URL") || "https://api.mercadopago.com/preapproval_plan";
+      const mercadopagoAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
+      const mercadopagoBackUrl = Deno.env.get("MERCADOPAGO_BACK_URL") || "https://www.yoursite.com";
+
+      if (!mercadopagoAccessToken) {
+        return new Response(
+          JSON.stringify({ success: false, error: "MercadoPago access token not configured" }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      const frequencyType = plan.billing_cycle === "annual" ? "months" : "months";
+      const frequency = plan.billing_cycle === "annual" ? 12 : 1;
+      const repetitions = plan.billing_cycle === "annual" ? 1 : 12;
+
+      const mercadopagoPayload = {
+        reason: plan.name,
+        auto_recurring: {
+          frequency: frequency,
+          frequency_type: frequencyType,
+          repetitions: repetitions,
+          billing_day: 10,
+          billing_day_proportional: true,
+          transaction_amount: plan.price,
+          currency_id: plan.currency || "UYU"
+        },
+        payment_methods_allowed: {
+          payment_types: [{}],
+          payment_methods: [{}]
+        },
+        back_url: mercadopagoBackUrl
+      };
+
+      if (plan.trial_days && plan.trial_days > 0) {
+        mercadopagoPayload.auto_recurring.free_trial = {
+          frequency: plan.trial_days >= 30 ? Math.floor(plan.trial_days / 30) : plan.trial_days,
+          frequency_type: plan.trial_days >= 30 ? "months" : "days"
+        };
+      }
+
+      try {
+        const mpResponse = await fetch(mercadopagoApiUrl, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${mercadopagoAccessToken}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(mercadopagoPayload)
+        });
+
+        if (!mpResponse.ok) {
+          const errorData = await mpResponse.text();
+          console.error("MercadoPago API Error:", errorData);
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: `MercadoPago API error: ${mpResponse.status}`,
+              details: errorData
+            }),
+            {
+              status: mpResponse.status,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+          );
+        }
+
+        const mpData = await mpResponse.json();
+
+        const { data: updatedPlan, error: updateError } = await supabase
+          .from("plans")
+          .update({
+            mp_preapproval_plan_id: mpData.id,
+            mp_status: mpData.status,
+            mp_init_point: mpData.init_point,
+            mp_back_url: mpData.back_url,
+            mp_collector_id: mpData.collector_id,
+            mp_application_id: mpData.application_id,
+            mp_date_created: mpData.date_created,
+            mp_last_modified: mpData.last_modified,
+            mp_response: mpData,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", planId)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error("Error updating plan with MP data:", updateError);
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: "Failed to update plan with MercadoPago data",
+              mp_data: mpData
+            }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: updatedPlan,
+            message: "Plan successfully synced with MercadoPago"
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      } catch (error) {
+        console.error("Error calling MercadoPago API:", error);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: error instanceof Error ? error.message : "Failed to sync with MercadoPago"
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+    }
+
     return new Response(
       JSON.stringify({ success: false, error: "Route not found" }),
       {

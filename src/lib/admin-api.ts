@@ -104,6 +104,15 @@ interface Plan {
   billing_cycle: 'monthly' | 'annual';
   trial_days?: number;
   entitlements: any;
+  mp_preapproval_plan_id?: string;
+  mp_status?: string;
+  mp_init_point?: string;
+  mp_back_url?: string;
+  mp_collector_id?: number;
+  mp_application_id?: number;
+  mp_date_created?: string;
+  mp_last_modified?: string;
+  mp_response?: any;
 }
 
 interface AuditLog {
@@ -572,6 +581,20 @@ class AdminAPIService {
     const result = await response.json();
     if (!result.success) {
       throw new Error(result.error || 'Failed to create feature');
+    }
+
+    return result.data;
+  }
+
+  async syncPlanWithMercadoPago(planId: string): Promise<Plan> {
+    const response = await fetch(`${getAdminApiUrl()}/plans/${planId}/sync-mercadopago`, {
+      method: 'POST',
+      headers: this.headers,
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to sync plan with MercadoPago');
     }
 
     return result.data;

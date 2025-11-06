@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Plus, Edit2, Trash2, DollarSign, Link } from 'lucide-react';
+import { X, Plus, Edit2, Trash2, DollarSign, Link, RefreshCw } from 'lucide-react';
 import { Application, Plan } from '../lib/admin-api';
 import { Button } from './Button';
 
@@ -12,9 +12,10 @@ interface ApplicationPlansModalProps {
   onEditPlan: (plan: Plan) => void;
   onDeletePlan: (planId: string) => void;
   onAssignExistingPlan: (planId: string) => void;
+  onSyncMercadoPago: (planId: string) => void;
 }
 
-export function ApplicationPlansModal({ application, plans, allPlans, onClose, onAddPlan, onEditPlan, onDeletePlan, onAssignExistingPlan }: ApplicationPlansModalProps) {
+export function ApplicationPlansModal({ application, plans, allPlans, onClose, onAddPlan, onEditPlan, onDeletePlan, onAssignExistingPlan, onSyncMercadoPago }: ApplicationPlansModalProps) {
   const [showAssignMenu, setShowAssignMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -193,29 +194,47 @@ export function ApplicationPlansModal({ application, plans, allPlans, onClose, o
                         </div>
                       )}
                     </div>
-                    <div className="flex gap-2 ml-4">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onEditPlan(plan)}
-                        icon={<Edit2 size={14} />}
-                        className="text-blue-600 hover:bg-blue-50"
-                      >
-                        Editar
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          if (confirm(`¿Eliminar el plan "${plan.name}"?`)) {
-                            onDeletePlan(plan.id);
-                          }
-                        }}
-                        icon={<Trash2 size={14} />}
-                        className="text-red-600 hover:bg-red-50"
-                      >
-                        Eliminar
-                      </Button>
+                    <div className="flex flex-col gap-2 ml-4">
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onEditPlan(plan)}
+                          icon={<Edit2 size={14} />}
+                          className="text-blue-600 hover:bg-blue-50"
+                        >
+                          Editar
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm(`¿Eliminar el plan "${plan.name}"?`)) {
+                              onDeletePlan(plan.id);
+                            }
+                          }}
+                          icon={<Trash2 size={14} />}
+                          className="text-red-600 hover:bg-red-50"
+                        >
+                          Eliminar
+                        </Button>
+                      </div>
+                      {plan.mp_preapproval_plan_id ? (
+                        <div className="text-xs text-green-600 flex items-center gap-1">
+                          <DollarSign size={12} />
+                          Sincronizado con MercadoPago
+                        </div>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onSyncMercadoPago(plan.id)}
+                          icon={<RefreshCw size={14} />}
+                          className="text-green-600 hover:bg-green-50 text-xs"
+                        >
+                          Sincronizar con MP
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>

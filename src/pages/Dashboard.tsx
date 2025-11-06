@@ -289,6 +289,16 @@ export function Dashboard() {
     }
   };
 
+  const handleSyncMercadoPago = async (planId: string) => {
+    try {
+      await adminApi.syncPlanWithMercadoPago(planId);
+      success('Plan sincronizado con MercadoPago exitosamente');
+      await refreshPlans();
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Error al sincronizar con MercadoPago');
+    }
+  };
+
   if (loading || !user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -763,6 +773,7 @@ export function Dashboard() {
           }}
           onDeletePlan={handleDeletePlan}
           onAssignExistingPlan={handleAssignExistingPlan}
+          onSyncMercadoPago={handleSyncMercadoPago}
         />
       )}
     </div>
