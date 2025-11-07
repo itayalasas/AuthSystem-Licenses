@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AuthService } from '../lib/auth';
+import { ConfigService } from '../lib/config';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 
 export function AuthCallback() {
@@ -12,42 +13,76 @@ export function AuthCallback() {
 
   async function handleCallback() {
     try {
-      const tokens = AuthService.parseTokenFromUrl();
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      const state = urlParams.get('state');
 
-      if (!tokens) {
+      if (!code) {
         setStatus('error');
-        setMessage('No se recibieron credenciales de autenticación');
+        setMessage('No se recibió el código de autorización');
         setTimeout(() => {
           window.location.href = '/';
         }, 3000);
         return;
       }
 
-      const user = AuthService.decodeToken(tokens.token);
+      setMessage('Intercambiando código por tokens...');
 
-      if (!user) {
+      const authValidateTokenUrl = ConfigService.getVariable('AUTH_VALIDATE_TOKEN');
+      const applicationId = ConfigService.getVariable('VITE_AUTH_APP_ID');
+
+      if (!authValidateTokenUrl || !applicationId) {
         setStatus('error');
-        setMessage('Token inválido');
+        setMessage('Configuración de autenticación no disponible');
         setTimeout(() => {
           window.location.href = '/';
         }, 3000);
         return;
       }
 
-      AuthService.saveTokens({ ...tokens, user });
+      const response = await fetch(authValidateTokenUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code: code,
+          application_id: applicationId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Error intercambiando código');
+      }
+
+      const result = await response.json();
+
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'Error en la respuesta del servidor');
+      }
+
+      const { access_token, refresh_token, user, tenant, has_access } = result.data;
+
+      const tokens = {
+        token: access_token,
+        refreshToken: refresh_token,
+        user: {
+          sub: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          permissions: user.permissions,
+        },
+      };
+
+      AuthService.saveTokens(tokens);
 
       setStatus('success');
       setMessage(`¡Bienvenido, ${user.name}!`);
 
-      const isNewUser = new URLSearchParams(window.location.search).get('new_user') === 'true';
-
-      if (isNewUser) {
-        await onboardNewUser(user);
-      } else {
-        setTimeout(() => {
-          window.location.href = '/dashboard';
-        }, 1500);
-      }
+      setTimeout(() => {
+        window.location.href = '/dashboard';
+      }, 1500);
     } catch (error) {
       console.error('Error in callback:', error);
       setStatus('error');
