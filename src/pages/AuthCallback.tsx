@@ -32,7 +32,7 @@ export function AuthCallback() {
 
       setMessage('Intercambiando código por tokens...');
 
-      const authValidateTokenUrl = ConfigService.getVariable('AUTH_VALIDA_TOKEN');
+      const authValidateTokenUrl = ConfigService.getVariable('AUTH_VALIDATE_TOKEN');
       const applicationId = ConfigService.getVariable('VITE_AUTH_APP_ID');
 
       console.log('Auth Config:', { authValidateTokenUrl, applicationId });

@@ -30,7 +30,7 @@ La aplicación automáticamente:
 
 1. Extrae el parámetro `code` de la URL
 2. Obtiene la URL del endpoint de validación desde la API de configuración:
-   - Variable: `AUTH_VALIDA_TOKEN`
+   - Variable: `AUTH_VALIDATE_TOKEN`
    - Valor: `https://sfqtmnncgiqkveaoqckt.supabase.co/functions/v1/auth-exchange-code`
 
 3. Hace una petición POST al endpoint con:
@@ -98,14 +98,14 @@ La aplicación:
 
 ```json
 {
-  "AUTH_VALIDA_TOKEN": "https://sfqtmnncgiqkveaoqckt.supabase.co/functions/v1/auth-exchange-code",
+  "AUTH_VALIDATE_TOKEN": "https://sfqtmnncgiqkveaoqckt.supabase.co/functions/v1/auth-exchange-code",
   "VITE_AUTH_APP_ID": "app_bcc65e74-308",
   "VITE_AUTH_URL": "https://auth-licenses.netlify.app",
   "VITE_REDIRECT_URI": "https://tu-app.com/callback"
 }
 ```
 
-**Nota:** La variable se llama `AUTH_VALIDA_TOKEN` (no AUTH_VALIDATE_TOKEN). Esta variable se obtiene automáticamente desde la API externa `/get-env`.
+**Nota:** La variable se llama `AUTH_VALIDATE_TOKEN` (no AUTH_VALIDATE_TOKEN). Esta variable se obtiene automáticamente desde la API externa `/get-env`.
 
 ## Beneficios de este Flujo
 

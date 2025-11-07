@@ -87,7 +87,7 @@ Variables requeridas que deben estar en el servidor de configuración:
   "VITE_AUTH_URL": "https://auth-licenses.netlify.app",
   "VITE_AUTH_APP_ID": "app_bcc65e74-308",
   "VITE_REDIRECT_URI": "https://tu-admin-panel-123.netlify.app/callback",
-  "AUTH_VALIDA_TOKEN": "https://sfqtmnncgiqkveaoqckt.supabase.co/functions/v1/auth-exchange-code",
+  "AUTH_VALIDATE_TOKEN": "https://sfqtmnncgiqkveaoqckt.supabase.co/functions/v1/auth-exchange-code",
   "MERCADOPAGO_ACCESS_TOKEN": "TEST-...",
   "MERCADOPAGO_API_URL": "https://api.mercadopago.com/preapproval_plan"
 }

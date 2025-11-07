@@ -37,7 +37,7 @@ Estas son las variables que la aplicación espera del servidor de configuración
 | `VITE_AUTH_APP_ID` | ID de la aplicación en el sistema de auth | `app_bcc65e74-308` |
 | `VITE_AUTH_API_KEY` | API Key para autenticación | `ak_production_...` |
 | `VITE_REDIRECT_URI` | URL de callback después de login | `https://tu-app.netlify.app/callback` |
-| `AUTH_VALIDA_TOKEN` | Endpoint para intercambio de código | `https://sfqtmnncgiqkveaoqckt.supabase.co/functions/v1/auth-exchange-code` |
+| `AUTH_VALIDATE_TOKEN` | Endpoint para intercambio de código | `https://sfqtmnncgiqkveaoqckt.supabase.co/functions/v1/auth-exchange-code` |
 
 ### Variables de Base de Datos
 
@@ -161,4 +161,4 @@ location.reload();
 
 ## Variables con Typo Conocido
 
-⚠️ **AUTH_VALIDA_TOKEN** - El nombre correcto debería ser `AUTH_VALIDATE_TOKEN`, pero mantiene el typo por compatibilidad con el servidor externo. El código usa el nombre correcto que está en el servidor.
+⚠️ **AUTH_VALIDATE_TOKEN** - El nombre correcto debería ser `AUTH_VALIDATE_TOKEN`, pero mantiene el typo por compatibilidad con el servidor externo. El código usa el nombre correcto que está en el servidor.
