@@ -31,6 +31,8 @@ export function PlanModal({ plan, applications, onClose, onCreate, onUpdate, adm
     currency: plan?.currency || 'USD',
     billing_cycle: plan?.billing_cycle || 'monthly',
     trial_days: plan?.trial_days || 14,
+    billing_day: plan?.billing_day || '',
+    external_reference: plan?.external_reference || '',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -135,21 +137,21 @@ export function PlanModal({ plan, applications, onClose, onCreate, onUpdate, adm
               </select>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Nombre del Plan
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Plan Profesional"
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nombre del Plan
+              </label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Plan Profesional"
+              />
+            </div>
 
+            <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Días de Prueba
@@ -165,6 +167,37 @@ export function PlanModal({ plan, applications, onClose, onCreate, onUpdate, adm
                   placeholder="14"
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Día de Facturación
+                </label>
+                <select
+                  value={formData.billing_day}
+                  onChange={(e) => setFormData({ ...formData, billing_day: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Sin fecha específica</option>
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                    <option key={day} value={day}>{day}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">Día del mes para cobrar la suscripción</p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Código de Referencia
+              </label>
+              <input
+                type="text"
+                value={formData.external_reference}
+                onChange={(e) => setFormData({ ...formData, external_reference: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Ej: BAILE10"
+              />
+              <p className="text-xs text-gray-500 mt-1">Código para identificar este plan</p>
             </div>
 
             <div>

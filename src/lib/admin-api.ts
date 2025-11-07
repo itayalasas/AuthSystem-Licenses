@@ -103,6 +103,8 @@ interface Plan {
   currency: string;
   billing_cycle: 'monthly' | 'annual';
   trial_days?: number;
+  billing_day?: number;
+  external_reference?: string;
   entitlements: any;
   mp_preapproval_plan_id?: string;
   mp_status?: string;

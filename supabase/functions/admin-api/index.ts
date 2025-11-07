@@ -897,6 +897,14 @@ Deno.serve(async (req: Request) => {
         };
       }
 
+      if (plan.billing_day && plan.billing_day >= 1 && plan.billing_day <= 31) {
+        mercadopagoPayload.auto_recurring.billing_day = parseInt(plan.billing_day);
+      }
+
+      if (plan.external_reference && plan.external_reference.trim() !== '') {
+        mercadopagoPayload.external_reference = plan.external_reference.trim();
+      }
+
       try {
         const mpResponse = await fetch(mercadopagoApiUrl, {
           method: "POST",
