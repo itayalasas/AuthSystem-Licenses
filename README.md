@@ -76,20 +76,27 @@ En tu sistema de autenticación (auth-licenses.netlify.app):
 
 ## 🔧 Configuración
 
-Todas las variables se cargan dinámicamente desde la tabla `app_config` vía la API `/get-env`.
+Todas las variables se cargan dinámicamente desde la API externa:
+- **URL**: `https://ffihaeatoundrjzgtpzk.supabase.co/functions/v1/get-env`
+- **Access Key**: Configurado en `src/lib/config.ts`
 
-Variables requeridas en `app_config`:
+Variables requeridas que deben estar en el servidor de configuración:
 
 ```json
 {
   "VITE_AUTH_URL": "https://auth-licenses.netlify.app",
   "VITE_AUTH_APP_ID": "app_bcc65e74-308",
   "VITE_REDIRECT_URI": "https://tu-admin-panel-123.netlify.app/callback",
-  "AUTH_VALIDATE_TOKEN": "https://sfqtmnncgiqkveaoqckt.supabase.co/functions/v1/auth-exchange-code",
+  "AUTH_VALIDA_TOKEN": "https://sfqtmnncgiqkveaoqckt.supabase.co/functions/v1/auth-exchange-code",
   "MERCADOPAGO_ACCESS_TOKEN": "TEST-...",
   "MERCADOPAGO_API_URL": "https://api.mercadopago.com/preapproval_plan"
 }
 ```
+
+**Nota Importante:**
+- ✅ No necesitas configurar variables de entorno en Netlify
+- ✅ Todas las variables se obtienen automáticamente al iniciar la aplicación
+- ⚠️ Si necesitas agregar/modificar variables, hazlo en el servidor de configuración externo
 
 ## 📱 Responsive Design
 
