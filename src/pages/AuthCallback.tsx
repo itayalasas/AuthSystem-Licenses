@@ -26,14 +26,25 @@ export function AuthCallback() {
         return;
       }
 
+      setMessage('Cargando configuración...');
+
+      await ConfigService.getConfig();
+
       setMessage('Intercambiando código por tokens...');
 
       const authValidateTokenUrl = ConfigService.getVariable('AUTH_VALIDA_TOKEN');
       const applicationId = ConfigService.getVariable('VITE_AUTH_APP_ID');
 
+      console.log('Auth Config:', { authValidateTokenUrl, applicationId });
+
       if (!authValidateTokenUrl || !applicationId) {
         setStatus('error');
         setMessage('Configuración de autenticación no disponible');
+        console.error('Missing config:', {
+          authValidateTokenUrl,
+          applicationId,
+          allVars: ConfigService.getAllVariables()
+        });
         setTimeout(() => {
           window.location.href = '/';
         }, 3000);

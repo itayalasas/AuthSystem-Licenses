@@ -102,8 +102,10 @@ class ConfigService {
     if (!this.config) {
       const cached = this.getCachedConfig();
       if (cached) {
+        this.config = cached;
         return cached.variables[key];
       }
+      console.warn(`Config not loaded yet, variable ${key} unavailable`);
       return undefined;
     }
 
@@ -114,8 +116,10 @@ class ConfigService {
     if (!this.config) {
       const cached = this.getCachedConfig();
       if (cached) {
+        this.config = cached;
         return cached.variables;
       }
+      console.warn('Config not loaded yet, no variables available');
       return {};
     }
 
