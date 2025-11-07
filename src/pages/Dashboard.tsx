@@ -50,6 +50,7 @@ export function Dashboard() {
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [showCreateTenantModal, setShowCreateTenantModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
   const [showPlanModal, setShowPlanModal] = useState(false);
@@ -323,39 +324,62 @@ export function Dashboard() {
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
       {/* Top Navigation */}
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-40">
+      <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-lg">
-                <Shield className="w-6 h-6 text-white" />
+            {/* Mobile menu button */}
+            <button
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {showMobileMenu ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                )}
+              </svg>
+            </button>
+
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg flex items-center justify-center shadow-lg">
+                <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-lg font-bold text-gray-900">Admin Panel</h1>
-                <p className="text-xs text-gray-500">Subscription Manager</p>
+                <h1 className="text-base sm:text-lg font-bold text-gray-900">Admin Panel</h1>
+                <p className="text-xs text-gray-500 hidden sm:block">Subscription Manager</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4">
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={handleSyncApplications}
                 loading={syncing}
                 icon={<RefreshCw size={14} />}
+                className="hidden sm:flex"
               >
                 Sincronizar
               </Button>
 
+              <button
+                onClick={handleSyncApplications}
+                disabled={syncing}
+                className="sm:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
+              </button>
+
               <div className="relative">
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  className="flex items-center gap-2 px-2 sm:px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
                 >
                   <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                     <User className="w-4 h-4 text-blue-600" />
                   </div>
-                  <span className="text-sm font-medium text-gray-700">{user.name}</span>
+                  <span className="text-sm font-medium text-gray-700 hidden md:block">{user.name}</span>
                 </button>
 
                 {showUserMenu && (
@@ -381,7 +405,21 @@ export function Dashboard() {
 
       {/* Side Navigation */}
       <div className="flex">
-        <aside className="w-64 bg-white border-r border-gray-200 min-h-[calc(100vh-4rem)] sticky top-16">
+        {/* Mobile menu overlay */}
+        {showMobileMenu && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+            onClick={() => setShowMobileMenu(false)}
+          />
+        )}
+
+        <aside className={`
+          fixed lg:static inset-y-0 left-0 z-50
+          w-64 bg-white border-r border-gray-200 min-h-screen lg:min-h-[calc(100vh-4rem)]
+          transform transition-transform duration-300 ease-in-out lg:translate-x-0
+          ${showMobileMenu ? 'translate-x-0' : '-translate-x-full'}
+          top-0 lg:top-16 pt-20 lg:pt-0 lg:sticky
+        `}>
           <nav className="p-4 space-y-1">
             {[
               { id: 'dashboard', label: 'Dashboard', icon: Activity },
@@ -392,7 +430,10 @@ export function Dashboard() {
             ].map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
-                onClick={() => setActiveView(id as any)}
+                onClick={() => {
+                  setActiveView(id as any);
+                  setShowMobileMenu(false);
+                }}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   activeView === id
                     ? 'bg-blue-50 text-blue-700'
@@ -407,18 +448,18 @@ export function Dashboard() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 p-8">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">
             {activeView === 'dashboard' && (
-              <div className="space-y-6 animate-fade-in">
+              <div className="space-y-4 sm:space-y-6 animate-fade-in">
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Dashboard</h2>
+                  <p className="text-xs sm:text-sm text-gray-600 mt-1">
                     Resumen general del sistema
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                   <StatCard
                     title="Total Clientes"
                     value={stats?.tenants_count || 0}
@@ -508,11 +549,11 @@ export function Dashboard() {
             )}
 
             {activeView === 'plans' && (
-              <div className="animate-fade-in space-y-6">
-                <div className="flex items-center justify-between">
+              <div className="animate-fade-in space-y-4 sm:space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Planes</h2>
-                    <p className="text-sm text-gray-600 mt-1">
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Planes</h2>
+                    <p className="text-xs sm:text-sm text-gray-600 mt-1">
                       Gestiona los planes de suscripción
                     </p>
                   </div>
@@ -522,12 +563,13 @@ export function Dashboard() {
                       setShowPlanModal(true);
                     }}
                     icon={<DollarSign size={16} />}
+                    className="w-full sm:w-auto"
                   >
                     Nuevo Plan
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   {plans.map((plan) => (
                     <PlanCard
                       key={plan.id}
