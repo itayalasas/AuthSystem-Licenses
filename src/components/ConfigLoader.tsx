@@ -44,13 +44,18 @@ export function ConfigLoader({ children }: ConfigLoaderProps) {
 
   if (status === 'loading') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
-            Cargando configuración...
-          </h2>
-          <p className="text-gray-600">Por favor espera un momento</p>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 flex items-center justify-center">
+        <div className="max-w-md w-full">
+          <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+            <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+              Cargando configuración
+            </h2>
+            <p className="text-gray-600 mb-6">Por favor espera un momento</p>
+            <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div className="h-full bg-blue-600 animate-pulse w-3/4"></div>
+            </div>
+          </div>
         </div>
       </div>
     );

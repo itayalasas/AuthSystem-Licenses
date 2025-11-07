@@ -1,49 +1,76 @@
 import { useEffect, useState } from 'react';
 import { AuthService } from '../lib/auth';
 import { ConfigService } from '../lib/config';
-import { Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { AuthProgress } from '../components/AuthProgress';
+
+interface Step {
+  id: string;
+  label: string;
+  status: 'pending' | 'loading' | 'success' | 'error';
+}
 
 export function AuthCallback() {
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-  const [message, setMessage] = useState('Procesando autenticación...');
+  const [steps, setSteps] = useState<Step[]>([
+    { id: 'validate', label: 'Validando código de autorización', status: 'pending' },
+    { id: 'config', label: 'Cargando configuración', status: 'pending' },
+    { id: 'exchange', label: 'Intercambiando código por tokens', status: 'pending' },
+    { id: 'save', label: 'Guardando sesión', status: 'pending' },
+    { id: 'redirect', label: 'Redirigiendo al dashboard', status: 'pending' },
+  ]);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [error, setError] = useState<string | undefined>();
 
   useEffect(() => {
     handleCallback();
   }, []);
 
+  function updateStep(stepId: string, status: Step['status']) {
+    setSteps((prev) =>
+      prev.map((step) => (step.id === stepId ? { ...step, status } : step))
+    );
+  }
+
+  function moveToNextStep() {
+    setCurrentStep((prev) => prev + 1);
+  }
+
   async function handleCallback() {
     try {
+      updateStep('validate', 'loading');
+
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
       const state = urlParams.get('state');
 
       if (!code) {
-        setStatus('error');
-        setMessage('No se recibió el código de autorización');
+        updateStep('validate', 'error');
+        setError('No se recibió el código de autorización');
         setTimeout(() => {
           window.location.href = '/';
         }, 3000);
         return;
       }
 
-      setMessage('Cargando configuración...');
+      updateStep('validate', 'success');
+      moveToNextStep();
 
+      updateStep('config', 'loading');
       await ConfigService.getConfig();
+      updateStep('config', 'success');
+      moveToNextStep();
 
-      setMessage('Intercambiando código por tokens...');
+      updateStep('exchange', 'loading');
 
       const authValidateTokenUrl = ConfigService.getVariable('AUTH_VALIDATE_TOKEN');
       const applicationId = ConfigService.getVariable('VITE_AUTH_APP_ID');
 
-      console.log('Auth Config:', { authValidateTokenUrl, applicationId });
-
       if (!authValidateTokenUrl || !applicationId) {
-        setStatus('error');
-        setMessage('Configuración de autenticación no disponible');
+        updateStep('exchange', 'error');
+        setError('Configuración de autenticación no disponible');
         console.error('Missing config:', {
           authValidateTokenUrl,
           applicationId,
-          allVars: ConfigService.getAllVariables()
+          allVars: ConfigService.getAllVariables(),
         });
         setTimeout(() => {
           window.location.href = '/';
@@ -72,7 +99,12 @@ export function AuthCallback() {
         throw new Error(result.error || 'Error en la respuesta del servidor');
       }
 
-      const { access_token, refresh_token, user, tenant, has_access } = result.data;
+      const { access_token, refresh_token, user } = result.data;
+
+      updateStep('exchange', 'success');
+      moveToNextStep();
+
+      updateStep('save', 'loading');
 
       const tokens = {
         token: access_token,
@@ -88,93 +120,33 @@ export function AuthCallback() {
 
       AuthService.saveTokens(tokens);
 
-      setStatus('success');
-      setMessage(`¡Bienvenido, ${user.name}!`);
+      updateStep('save', 'success');
+      moveToNextStep();
+
+      updateStep('redirect', 'loading');
 
       setTimeout(() => {
-        window.location.href = '/dashboard';
-      }, 1500);
-    } catch (error) {
-      console.error('Error in callback:', error);
-      setStatus('error');
-      setMessage('Error procesando la autenticación');
+        updateStep('redirect', 'success');
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 800);
+      }, 500);
+    } catch (err) {
+      console.error('Error in callback:', err);
+      const currentStepData = steps[currentStep];
+      if (currentStepData) {
+        updateStep(currentStepData.id, 'error');
+      }
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Error procesando la autenticación'
+      );
       setTimeout(() => {
         window.location.href = '/';
       }, 3000);
     }
   }
 
-  async function onboardNewUser(user: any) {
-    try {
-      setMessage('Configurando tu cuenta...');
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tenant-onboarding`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          },
-          body: JSON.stringify({
-            application_id: import.meta.env.VITE_AUTH_APP_ID,
-            user_id: user.sub,
-            email: user.email,
-            name: user.name,
-          }),
-        }
-      );
-
-      const result = await response.json();
-
-      if (result.success) {
-        setMessage('¡Cuenta configurada exitosamente!');
-        setTimeout(() => {
-          window.location.href = '/dashboard';
-        }, 1500);
-      } else {
-        throw new Error(result.error || 'Error en onboarding');
-      }
-    } catch (error) {
-      console.error('Error en onboarding:', error);
-      setMessage('Cuenta creada, pero hubo un problema con la configuración. Contacta a soporte.');
-      setTimeout(() => {
-        window.location.href = '/dashboard';
-      }, 3000);
-    }
-  }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
-        <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
-          <div className="mb-6">
-            {status === 'loading' && (
-              <Loader2 className="w-16 h-16 text-blue-600 animate-spin mx-auto" />
-            )}
-            {status === 'success' && (
-              <CheckCircle className="w-16 h-16 text-green-600 mx-auto" />
-            )}
-            {status === 'error' && <XCircle className="w-16 h-16 text-red-600 mx-auto" />}
-          </div>
-
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            {status === 'loading' && 'Procesando...'}
-            {status === 'success' && '¡Éxito!'}
-            {status === 'error' && 'Error'}
-          </h2>
-
-          <p className="text-gray-600">{message}</p>
-
-          {status === 'loading' && (
-            <div className="mt-6">
-              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-600 animate-pulse w-3/4"></div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  return <AuthProgress steps={steps} currentStep={currentStep} error={error} />;
 }
