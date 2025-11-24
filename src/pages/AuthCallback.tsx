@@ -113,10 +113,8 @@ export function AuthCallback() {
         'Content-Type': 'application/json',
       };
 
-      if (accessKey) {
-        headers['X-Access-Key'] = accessKey;
-      }
-
+      // Solo usar X-API-Key para autenticación con la API externa
+      // X-Access-Key es solo para nuestras propias APIs
       if (apiKey) {
         headers['X-API-Key'] = apiKey;
       }
