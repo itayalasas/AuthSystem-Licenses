@@ -62,6 +62,8 @@ export function AuthCallback() {
 
       const authValidateTokenUrl = ConfigService.getVariable('AUTH_VALIDATE_TOKEN');
       const applicationId = ConfigService.getVariable('VITE_AUTH_APP_ID');
+      const apiKey = ConfigService.getVariable('VITE_AUTH_API_KEY');
+      const accessKey = ConfigService.getAccessKey();
 
       if (!authValidateTokenUrl || !applicationId) {
         updateStep('exchange', 'error');
@@ -69,6 +71,7 @@ export function AuthCallback() {
         console.error('Missing config:', {
           authValidateTokenUrl,
           applicationId,
+          apiKey,
           allVars: ConfigService.getAllVariables(),
         });
         setTimeout(() => {
@@ -77,11 +80,30 @@ export function AuthCallback() {
         return;
       }
 
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      if (accessKey) {
+        headers['X-Access-Key'] = accessKey;
+      }
+
+      if (apiKey) {
+        headers['X-API-Key'] = apiKey;
+      }
+
+      console.log('🔄 Intercambiando código con headers:', {
+        url: authValidateTokenUrl,
+        headers: Object.keys(headers),
+        body: {
+          code: code.substring(0, 8) + '...',
+          application_id: applicationId,
+        },
+      });
+
       const response = await fetch(authValidateTokenUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           code: code,
           application_id: applicationId,
@@ -89,10 +111,21 @@ export function AuthCallback() {
       });
 
       if (!response.ok) {
-        throw new Error('Error intercambiando código');
+        const errorText = await response.text();
+        console.error('❌ Error en respuesta del servidor:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText,
+        });
+        throw new Error(`Error intercambiando código (${response.status}): ${errorText}`);
       }
 
       const result = await response.json();
+      console.log('✅ Respuesta exitosa del servidor:', {
+        success: result.success,
+        hasData: !!result.data,
+        dataKeys: result.data ? Object.keys(result.data) : [],
+      });
 
       if (!result.success || !result.data) {
         throw new Error(result.error || 'Error en la respuesta del servidor');
