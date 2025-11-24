@@ -40,7 +40,6 @@ export function AuthCallback() {
 
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
-      const state = urlParams.get('state');
 
       if (!code) {
         updateStep('validate', 'error');
@@ -99,7 +98,14 @@ export function AuthCallback() {
         throw new Error(result.error || 'Error en la respuesta del servidor');
       }
 
-      const { access_token, refresh_token, user } = result.data;
+      const {
+        access_token,
+        refresh_token,
+        user,
+        tenant,
+        has_access,
+        available_plans
+      } = result.data;
 
       updateStep('exchange', 'success');
       moveToNextStep();
@@ -113,12 +119,30 @@ export function AuthCallback() {
           sub: user.id,
           email: user.email,
           name: user.name,
+          app_id: result.data.application?.id || '',
           role: user.role,
           permissions: user.permissions,
+          iat: 0,
+          exp: 0,
+          iss: '',
+          aud: '',
+          metadata: user.metadata || {},
         },
       };
 
       AuthService.saveTokens(tokens);
+
+      if (tenant) {
+        localStorage.setItem('tenant_info', JSON.stringify(tenant));
+      }
+
+      if (typeof has_access !== 'undefined') {
+        localStorage.setItem('has_access', JSON.stringify(has_access));
+      }
+
+      if (available_plans) {
+        localStorage.setItem('available_plans', JSON.stringify(available_plans));
+      }
 
       updateStep('save', 'success');
       moveToNextStep();

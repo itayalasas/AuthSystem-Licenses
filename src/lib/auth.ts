@@ -11,13 +11,15 @@ interface AuthUser {
   exp: number;
   iss: string;
   aud: string;
+  metadata?: Record<string, any>;
 }
 
 interface AuthTokens {
   token: string;
-  refresh_token: string;
-  user_id: string;
-  state: string;
+  refreshToken?: string;
+  refresh_token?: string;
+  user_id?: string;
+  state?: string;
   user?: AuthUser;
 }
 
@@ -71,6 +73,11 @@ class AuthService {
     const refresh_token = params.get('refresh_token');
     const user_id = params.get('user_id');
     const state = params.get('state');
+    const code = params.get('code');
+
+    if (code) {
+      return null;
+    }
 
     if (!token || !refresh_token || !user_id) {
       return null;
@@ -80,7 +87,7 @@ class AuthService {
       token,
       refresh_token,
       user_id,
-      state,
+      state: state || undefined,
     };
   }
 
@@ -103,10 +110,14 @@ class AuthService {
   }
 
   static saveTokens(tokens: AuthTokens) {
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(tokens));
+    const normalizedTokens = {
+      ...tokens,
+      refresh_token: tokens.refreshToken || tokens.refresh_token,
+    };
+    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(normalizedTokens));
 
     if (tokens.token) {
-      const user = this.decodeToken(tokens.token);
+      const user = tokens.user || this.decodeToken(tokens.token);
       if (user) {
         localStorage.setItem(this.USER_KEY, JSON.stringify(user));
       }
@@ -153,40 +164,46 @@ class AuthService {
   static logout() {
     localStorage.removeItem(this.STORAGE_KEY);
     localStorage.removeItem(this.USER_KEY);
+    localStorage.removeItem('tenant_info');
+    localStorage.removeItem('has_access');
+    localStorage.removeItem('available_plans');
     window.location.href = '/';
   }
 
   static async refreshToken(): Promise<boolean> {
     const tokens = this.getTokens();
-    if (!tokens?.refresh_token) return false;
+    const refreshToken = tokens?.refreshToken || tokens?.refresh_token;
+    if (!refreshToken) return false;
 
-    const authUrl = this.getAuthUrl();
-    const appId = this.getAppId();
-    const apiKey = this.getApiKey();
+    const authRefreshUrl = ConfigService.getVariable('AUTH_REFRESH_TOKEN');
+    const applicationId = ConfigService.getVariable('VITE_AUTH_APP_ID');
+
+    if (!authRefreshUrl || !applicationId) {
+      console.error('Missing refresh token configuration');
+      return false;
+    }
 
     try {
-      const response = await fetch(`${authUrl}/refresh`, {
+      const response = await fetch(authRefreshUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          refresh_token: tokens.refresh_token,
-          app_id: appId,
-          api_key: apiKey,
+          refresh_token: refreshToken,
+          application_id: applicationId,
         }),
       });
 
       if (!response.ok) return false;
 
-      const data = await response.json();
+      const result = await response.json();
 
-      if (data.token) {
+      if (result.success && result.data?.access_token) {
         this.saveTokens({
-          token: data.token,
-          refresh_token: data.refresh_token || tokens.refresh_token,
-          user_id: tokens.user_id,
-          state: 'authenticated',
+          token: result.data.access_token,
+          refreshToken: result.data.refresh_token || refreshToken,
+          user: result.data.user,
         });
         return true;
       }
@@ -213,6 +230,33 @@ class AuthService {
     if (!tokens?.token) return null;
 
     return `Bearer ${tokens.token}`;
+  }
+
+  static getTenantInfo(): any | null {
+    try {
+      const stored = localStorage.getItem('tenant_info');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  static getHasAccess(): boolean {
+    try {
+      const stored = localStorage.getItem('has_access');
+      return stored ? JSON.parse(stored) : false;
+    } catch {
+      return false;
+    }
+  }
+
+  static getAvailablePlans(): any[] {
+    try {
+      const stored = localStorage.getItem('available_plans');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
   }
 }
 
