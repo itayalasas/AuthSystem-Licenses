@@ -19,9 +19,12 @@ export function AuthCallback() {
   ]);
   const [currentStep, setCurrentStep] = useState(0);
   const [error, setError] = useState<string | undefined>();
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    handleCallback();
+    if (!isProcessing) {
+      handleCallback();
+    }
   }, []);
 
   function updateStep(stepId: string, status: Step['status']) {
@@ -35,6 +38,13 @@ export function AuthCallback() {
   }
 
   async function handleCallback() {
+    if (isProcessing) {
+      console.log('⏸️ Ya hay un proceso de autenticación en curso, ignorando...');
+      return;
+    }
+
+    setIsProcessing(true);
+
     try {
       updateStep('validate', 'loading');
 
@@ -49,6 +59,11 @@ export function AuthCallback() {
         }, 3000);
         return;
       }
+
+      console.log('🔍 Código recibido:', code.substring(0, 10) + '...');
+
+      // Limpiar el código de la URL inmediatamente para evitar reintentos
+      window.history.replaceState({}, document.title, '/callback');
 
       updateStep('validate', 'success');
       moveToNextStep();
@@ -189,7 +204,7 @@ export function AuthCallback() {
         }, 800);
       }, 500);
     } catch (err) {
-      console.error('Error in callback:', err);
+      console.error('❌ Error in callback:', err);
       const currentStepData = steps[currentStep];
       if (currentStepData) {
         updateStep(currentStepData.id, 'error');
@@ -202,6 +217,8 @@ export function AuthCallback() {
       setTimeout(() => {
         window.location.href = '/';
       }, 3000);
+    } finally {
+      setIsProcessing(false);
     }
   }
 
