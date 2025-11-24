@@ -82,20 +82,23 @@ export function AuthCallback() {
 
       const authValidateTokenUrl = ConfigService.getVariable('AUTH_VALIDATE_TOKEN');
       const applicationId = ConfigService.getVariable('VITE_AUTH_APP_ID');
+      const authApiKey = ConfigService.getVariable('AUTH_API_KEY');
 
       console.log('🔑 Variables de autenticación obtenidas:', {
         hasAuthUrl: !!authValidateTokenUrl,
         authUrl: authValidateTokenUrl,
         hasAppId: !!applicationId,
         appId: applicationId,
+        hasAuthApiKey: !!authApiKey,
       });
 
-      if (!authValidateTokenUrl || !applicationId) {
+      if (!authValidateTokenUrl || !applicationId || !authApiKey) {
         updateStep('exchange', 'error');
         setError('Configuración de autenticación no disponible');
         console.error('❌ Missing config:', {
           authValidateTokenUrl,
           applicationId,
+          authApiKey: authApiKey ? 'present' : 'missing',
           allVars: ConfigService.getAllVariables(),
         });
         setTimeout(() => {
@@ -104,10 +107,10 @@ export function AuthCallback() {
         return;
       }
 
-      // La API de autenticación externa solo requiere Content-Type
-      // No necesita X-API-Key ni X-Access-Key
+      // La API requiere X-Integration-Key con el AUTH_API_KEY
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
+        'X-Integration-Key': authApiKey,
       };
 
       console.log('🔄 Intercambiando código con headers:', {
