@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { AuthService } from '../lib/auth';
 import { ConfigService } from '../lib/config';
 import { AuthProgress } from '../components/AuthProgress';
@@ -19,10 +19,12 @@ export function AuthCallback() {
   ]);
   const [currentStep, setCurrentStep] = useState(0);
   const [error, setError] = useState<string | undefined>();
-  const [isProcessing, setIsProcessing] = useState(false);
+  const hasProcessed = useRef(false);
 
   useEffect(() => {
-    if (!isProcessing) {
+    // Solo ejecutar una vez, evitar múltiples ejecuciones en React strict mode
+    if (!hasProcessed.current) {
+      hasProcessed.current = true;
       handleCallback();
     }
   }, []);
@@ -38,13 +40,6 @@ export function AuthCallback() {
   }
 
   async function handleCallback() {
-    if (isProcessing) {
-      console.log('⏸️ Ya hay un proceso de autenticación en curso, ignorando...');
-      return;
-    }
-
-    setIsProcessing(true);
-
     try {
       updateStep('validate', 'loading');
 
@@ -61,9 +56,6 @@ export function AuthCallback() {
       }
 
       console.log('🔍 Código recibido:', code.substring(0, 10) + '...');
-
-      // Limpiar el código de la URL inmediatamente para evitar reintentos
-      window.history.replaceState({}, document.title, '/callback');
 
       updateStep('validate', 'success');
       moveToNextStep();
@@ -223,8 +215,6 @@ export function AuthCallback() {
       setTimeout(() => {
         window.location.href = '/';
       }, 3000);
-    } finally {
-      setIsProcessing(false);
     }
   }
 
