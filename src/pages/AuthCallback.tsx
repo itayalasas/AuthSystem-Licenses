@@ -69,7 +69,12 @@ export function AuthCallback() {
       moveToNextStep();
 
       updateStep('config', 'loading');
-      await ConfigService.getConfig();
+      const config = await ConfigService.getConfig();
+      console.log('📋 Configuración cargada:', {
+        projectName: config.project_name,
+        variableKeys: Object.keys(config.variables),
+        totalVariables: Object.keys(config.variables).length,
+      });
       updateStep('config', 'success');
       moveToNextStep();
 
@@ -80,10 +85,19 @@ export function AuthCallback() {
       const apiKey = ConfigService.getVariable('VITE_AUTH_API_KEY');
       const accessKey = ConfigService.getAccessKey();
 
+      console.log('🔑 Variables de autenticación obtenidas:', {
+        hasAuthUrl: !!authValidateTokenUrl,
+        authUrl: authValidateTokenUrl,
+        hasAppId: !!applicationId,
+        appId: applicationId,
+        hasApiKey: !!apiKey,
+        hasAccessKey: !!accessKey,
+      });
+
       if (!authValidateTokenUrl || !applicationId) {
         updateStep('exchange', 'error');
         setError('Configuración de autenticación no disponible');
-        console.error('Missing config:', {
+        console.error('❌ Missing config:', {
           authValidateTokenUrl,
           applicationId,
           apiKey,
