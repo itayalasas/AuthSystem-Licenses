@@ -97,13 +97,76 @@ Deno.serve(async (req: Request) => {
 
 async function processMercadoPagoEvent(supabase: any, payload: any) {
   const eventType = payload.type || payload.action;
-  
+
+  console.log('📨 MercadoPago webhook received:', { eventType, payload });
+
+  // Cuando se crea o aprueba una suscripción (preapproval)
+  if (eventType === 'subscription_preapproval' || eventType === 'preapproval') {
+    const preapprovalId = payload.data?.id;
+    const status = payload.data?.status;
+    const payerEmail = payload.data?.payer_email;
+    const planId = payload.data?.preapproval_plan_id;
+
+    console.log('📋 Preapproval event:', { preapprovalId, status, payerEmail, planId });
+
+    if (preapprovalId && status === 'authorized') {
+      // Buscar el plan por mp_preapproval_plan_id
+      const { data: plan } = await supabase
+        .from('plans')
+        .select('*')
+        .eq('mp_preapproval_plan_id', planId)
+        .maybeSingle();
+
+      if (plan) {
+        // Buscar la suscripción del usuario por email
+        const { data: applicationUser } = await supabase
+          .from('application_users')
+          .select('*, tenant:tenants(*)')
+          .eq('external_user_id', payerEmail)
+          .eq('application_id', plan.application_id)
+          .maybeSingle();
+
+        if (applicationUser) {
+          // Buscar o crear suscripción
+          const { data: subscription } = await supabase
+            .from('subscriptions')
+            .select('*')
+            .eq('tenant_id', applicationUser.tenant_id)
+            .eq('plan_id', plan.id)
+            .maybeSingle();
+
+          if (subscription) {
+            // Actualizar suscripción con el ID de MercadoPago
+            await supabase
+              .from('subscriptions')
+              .update({
+                provider_subscription_id: preapprovalId,
+                status: 'active',
+                metadata: {
+                  ...subscription.metadata,
+                  mp_preapproval_id: preapprovalId,
+                  webhook_event: eventType,
+                },
+              })
+              .eq('id', subscription.id);
+
+            console.log('✅ Subscription updated with preapproval_id:', preapprovalId);
+          }
+        }
+      }
+    }
+  }
+
   if (eventType === 'payment.created' || eventType === 'payment.approved') {
     const paymentId = payload.data?.id;
     const amount = payload.data?.transaction_amount;
     const customerId = payload.data?.payer?.id;
-    
+    const preapprovalId = payload.data?.preapproval_id;
+
+    console.log('💰 Payment event:', { paymentId, amount, preapprovalId });
+
     if (paymentId) {
+      // Primero buscar si existe un pago pendiente con este transaction_id
       const { data: pendingPayment } = await supabase
         .from('subscription_payments')
         .select('*, subscription:subscriptions(*)')
@@ -125,6 +188,50 @@ async function processMercadoPagoEvent(supabase: any, payload: any) {
             },
           })
           .eq('id', pendingPayment.id);
+
+        console.log('✅ Pending payment marked as completed:', paymentId);
+      } else if (preapprovalId) {
+        // Si no existe pago pendiente, pero hay un preapproval_id,
+        // crear un nuevo pago para la suscripción
+        const { data: subscription } = await supabase
+          .from('subscriptions')
+          .select('*, plan:plans(*), tenant:tenants(*)')
+          .eq('provider_subscription_id', preapprovalId)
+          .maybeSingle();
+
+        if (subscription) {
+          const now = new Date();
+          let periodEnd: Date;
+
+          if (subscription.plan.billing_cycle === 'monthly') {
+            periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+          } else {
+            periodEnd = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+          }
+
+          await supabase
+            .from('subscription_payments')
+            .insert({
+              subscription_id: subscription.id,
+              tenant_id: subscription.tenant_id,
+              plan_id: subscription.plan_id,
+              amount: amount,
+              currency: subscription.plan.currency || 'UYU',
+              status: 'completed',
+              payment_provider: 'mercadopago',
+              provider_transaction_id: paymentId,
+              provider_customer_id: customerId,
+              period_start: now.toISOString(),
+              period_end: periodEnd.toISOString(),
+              paid_at: now.toISOString(),
+              metadata: {
+                webhook_event: eventType,
+                preapproval_id: preapprovalId,
+              },
+            });
+
+          console.log('✅ New payment created for subscription:', subscription.id);
+        }
       }
     }
   }
