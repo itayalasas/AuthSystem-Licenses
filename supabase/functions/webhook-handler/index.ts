@@ -95,6 +95,72 @@ Deno.serve(async (req: Request) => {
   }
 });
 
+async function updateOrCreateLicense(supabase: any, subscriptionId: string) {
+  const { data: subscription } = await supabase
+    .from('subscriptions')
+    .select('*, plan:plans(*), tenant:tenants(*)')
+    .eq('id', subscriptionId)
+    .maybeSingle();
+
+  if (!subscription || !subscription.plan) {
+    console.log('⚠️ Subscription or plan not found for license update');
+    return;
+  }
+
+  const now = new Date();
+  const expiresAt = new Date(subscription.period_end);
+  const licenseType = subscription.status === 'trialing' ? 'trial' : 'paid';
+
+  const { data: existingLicense } = await supabase
+    .from('licenses')
+    .select('*')
+    .eq('subscription_id', subscriptionId)
+    .eq('tenant_id', subscription.tenant_id)
+    .maybeSingle();
+
+  if (existingLicense) {
+    await supabase
+      .from('licenses')
+      .update({
+        type: licenseType,
+        status: 'active',
+        expires_at: expiresAt.toISOString(),
+        entitlements: subscription.plan.entitlements || {},
+        metadata: {
+          ...existingLicense.metadata,
+          last_payment_processed: now.toISOString(),
+          plan_name: subscription.plan.name,
+        },
+      })
+      .eq('id', existingLicense.id);
+
+    console.log('✅ License updated:', existingLicense.id);
+  } else {
+    const { data: newLicense } = await supabase
+      .from('licenses')
+      .insert({
+        tenant_id: subscription.tenant_id,
+        subscription_id: subscriptionId,
+        application_id: subscription.plan.application_id,
+        plan_id: subscription.plan_id,
+        license_key: `LIC-${subscription.tenant_id.substring(0, 8)}-${Date.now()}`,
+        type: licenseType,
+        status: 'active',
+        issued_at: now.toISOString(),
+        expires_at: expiresAt.toISOString(),
+        entitlements: subscription.plan.entitlements || {},
+        metadata: {
+          created_by: 'webhook',
+          plan_name: subscription.plan.name,
+        },
+      })
+      .select()
+      .maybeSingle();
+
+    console.log('✅ New license created:', newLicense?.id);
+  }
+}
+
 async function processMercadoPagoEvent(supabase: any, payload: any) {
   const eventType = payload.type || payload.action;
 
@@ -150,6 +216,8 @@ async function processMercadoPagoEvent(supabase: any, payload: any) {
               })
               .eq('id', subscription.id);
 
+            await updateOrCreateLicense(supabase, subscription.id);
+
             console.log('✅ Subscription updated with preapproval_id:', preapprovalId);
           }
         }
@@ -188,6 +256,8 @@ async function processMercadoPagoEvent(supabase: any, payload: any) {
             },
           })
           .eq('id', pendingPayment.id);
+
+        await updateOrCreateLicense(supabase, pendingPayment.subscription_id);
 
         console.log('✅ Pending payment marked as completed:', paymentId);
       } else if (preapprovalId) {
@@ -229,6 +299,8 @@ async function processMercadoPagoEvent(supabase: any, payload: any) {
                 preapproval_id: preapprovalId,
               },
             });
+
+          await updateOrCreateLicense(supabase, subscription.id);
 
           console.log('✅ New payment created for subscription:', subscription.id);
         }
