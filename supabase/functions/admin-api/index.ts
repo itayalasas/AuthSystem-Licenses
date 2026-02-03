@@ -901,8 +901,10 @@ Deno.serve(async (req: Request) => {
           .upsert({
             tenant_id: tenant.id,
             application_id: application_id,
+            subscription_id: subscription.id,
             plan_id: plan_id,
             license_key: license_key,
+            type: plan.trial_days > 0 ? "trial" : "paid",
             status: plan.trial_days > 0 ? "trial" : "active",
             expires_at: plan.trial_days > 0
               ? new Date(Date.now() + plan.trial_days * 24 * 60 * 60 * 1000).toISOString()
