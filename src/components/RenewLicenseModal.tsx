@@ -46,8 +46,8 @@ export function RenewLicenseModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-scale-in">
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-scale-in flex flex-col">
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
               <RefreshCw className="w-5 h-5 text-blue-600" />
@@ -66,7 +66,7 @@ export function RenewLicenseModal({
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 overflow-y-auto flex-1">
           <div className="bg-gray-50 rounded-lg p-4">
             <h3 className="text-sm font-semibold text-gray-900 mb-3">Información Actual</h3>
             <div className="space-y-2 text-sm">
@@ -119,7 +119,7 @@ export function RenewLicenseModal({
             <label className="block text-sm font-semibold text-gray-900 mb-3">
               Selecciona un nuevo plan:
             </label>
-            <div className="space-y-3 max-h-[400px] overflow-y-auto">
+            <div className="space-y-3 max-h-[300px] overflow-y-auto">
               {plans.length === 0 ? (
                 <p className="text-sm text-gray-500 text-center py-4">
                   No hay planes disponibles para esta aplicación
@@ -199,7 +199,7 @@ export function RenewLicenseModal({
           )}
         </div>
 
-        <div className="p-6 border-t border-gray-200 bg-gray-50 flex gap-3 justify-end">
+        <div className="p-6 border-t border-gray-200 bg-gray-50 flex gap-3 justify-end flex-shrink-0">
           <Button
             variant="secondary"
             onClick={onClose}
