@@ -24,16 +24,20 @@ export function RenewLicenseModal({
   if (!isOpen || !user) return null;
 
   const handleRenew = async () => {
-    if (!selectedPlanId) return;
+    if (!selectedPlanId) {
+      console.log('No plan selected');
+      return;
+    }
 
+    console.log('Starting renewal with plan:', selectedPlanId);
     setLoading(true);
     try {
       await onRenew(selectedPlanId);
-      onClose();
+      console.log('Renewal successful');
     } catch (error) {
-      console.error('Error renewing license:', error);
-    } finally {
+      console.error('Error in handleRenew:', error);
       setLoading(false);
+      throw error;
     }
   };
 

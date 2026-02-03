@@ -90,17 +90,25 @@ export function ApplicationUsersModal({
   };
 
   const handleConfirmRenew = async (planId: string) => {
-    if (!selectedUser) return;
+    if (!selectedUser) {
+      console.log('No user selected');
+      return;
+    }
+
+    console.log('Renewing license for user:', selectedUser.external_user_id, 'with plan:', planId, 'and app:', applicationId);
 
     try {
-      await adminApi.renewLicense(selectedUser.external_user_id, planId, applicationId);
+      const result = await adminApi.renewLicense(selectedUser.external_user_id, planId, applicationId);
+      console.log('Renewal result:', result);
       showToast('Licencia renovada exitosamente', 'success');
       await loadUsers();
       setShowRenewModal(false);
       setSelectedUser(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al renovar licencia:', error);
-      showToast('Error al renovar la licencia', 'error');
+      const errorMessage = error?.message || 'Error desconocido al renovar la licencia';
+      showToast(errorMessage, 'error');
+      throw error;
     }
   };
 
