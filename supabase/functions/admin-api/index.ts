@@ -617,19 +617,21 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const { data: tenant, error: tenantError } = await supabase
-        .from("tenants")
-        .select("id")
-        .eq("owner_user_id", external_user_id)
+      // First, find the application user
+      const { data: appUser, error: appUserError } = await supabase
+        .from("application_users")
+        .select("tenant_id")
+        .eq("external_user_id", external_user_id)
+        .eq("application_id", application_id)
         .maybeSingle();
 
-      if (tenantError) throw tenantError;
+      if (appUserError) throw appUserError;
 
-      if (!tenant) {
+      if (!appUser) {
         return new Response(
           JSON.stringify({
             success: false,
-            error: "No tenant found for this user. Please create a tenant first."
+            error: "User not found in this application"
           }),
           {
             status: 404,
@@ -637,6 +639,8 @@ Deno.serve(async (req: Request) => {
           }
         );
       }
+
+      const tenant = { id: appUser.tenant_id };
 
       const { data: plan, error: planError } = await supabase
         .from("plans")
