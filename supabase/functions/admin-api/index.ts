@@ -621,12 +621,15 @@ Deno.serve(async (req: Request) => {
         }
 
         // First, verify the application user exists and get tenant_id if available
-        const { data: appUser, error: appUserError } = await supabase
+        const { data: appUsers, error: appUserError } = await supabase
           .from("application_users")
           .select("id, tenant_id")
           .eq("external_user_id", external_user_id)
           .eq("application_id", application_id)
-          .maybeSingle();
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        const appUser = appUsers && appUsers.length > 0 ? appUsers[0] : null;
 
         if (appUserError) {
           console.error('Error finding application user:', appUserError);
@@ -775,12 +778,15 @@ Deno.serve(async (req: Request) => {
 
         console.log('Found plan:', plan);
 
-        const { data: existingSubscription, error: existingSubError } = await supabase
+        const { data: existingSubscriptions, error: existingSubError } = await supabase
           .from("subscriptions")
           .select("id")
           .eq("tenant_id", tenant.id)
           .eq("application_id", application_id)
-          .maybeSingle();
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        const existingSubscription = existingSubscriptions && existingSubscriptions.length > 0 ? existingSubscriptions[0] : null;
 
         if (existingSubError) {
           console.error('Error finding subscription:', existingSubError);
