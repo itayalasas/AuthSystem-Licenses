@@ -620,10 +620,10 @@ Deno.serve(async (req: Request) => {
           );
         }
 
-        // First, find the application user
+        // First, verify the application user exists
         const { data: appUser, error: appUserError } = await supabase
           .from("application_users")
-          .select("tenant_id")
+          .select("id")
           .eq("external_user_id", external_user_id)
           .eq("application_id", application_id)
           .maybeSingle();
@@ -657,7 +657,44 @@ Deno.serve(async (req: Request) => {
         }
 
         console.log('Found app user:', appUser);
-        const tenant = { id: appUser.tenant_id };
+
+        // Now find the tenant through tenant_applications
+        const { data: tenantApp, error: tenantAppError } = await supabase
+          .from("tenant_applications")
+          .select("tenant_id")
+          .eq("application_id", application_id)
+          .maybeSingle();
+
+        if (tenantAppError) {
+          console.error('Error finding tenant application:', tenantAppError);
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: `Database error: ${tenantAppError.message}`
+            }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+          );
+        }
+
+        if (!tenantApp) {
+          console.log('No tenant found for application:', { application_id });
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: "No tenant found for this application"
+            }),
+            {
+              status: 404,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+          );
+        }
+
+        console.log('Found tenant app:', tenantApp);
+        const tenant = { id: tenantApp.tenant_id };
 
         const { data: plan, error: planError } = await supabase
           .from("plans")
