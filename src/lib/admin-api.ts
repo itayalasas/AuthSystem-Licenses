@@ -601,6 +601,25 @@ class AdminAPIService {
 
     return result.data;
   }
+
+  async renewLicense(externalUserId: string, planId: string, applicationId: string): Promise<any> {
+    const response = await fetch(`${getAdminApiUrl()}/users/assign-plan`, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify({
+        external_user_id: externalUserId,
+        plan_id: planId,
+        application_id: applicationId
+      }),
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to renew license');
+    }
+
+    return result.data;
+  }
 }
 
 export { AdminAPIService };

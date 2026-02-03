@@ -3,6 +3,7 @@ import { X, Users, Mail, Calendar, Clock, ExternalLink, CreditCard, AlertCircle,
 import { Button } from './Button';
 import { AdminAPIService, ApplicationUser, License, Plan } from '../lib/admin-api';
 import { ConfirmModal } from './ConfirmModal';
+import { RenewLicenseModal } from './RenewLicenseModal';
 import { useToast } from '../hooks/useToast';
 
 interface ApplicationUsersModalProps {
@@ -22,6 +23,7 @@ export function ApplicationUsersModal({
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
+  const [showRenewModal, setShowRenewModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<ApplicationUser | null>(null);
   const [assigningPlan, setAssigningPlan] = useState<string | null>(null);
   const [creatingTenant, setCreatingTenant] = useState<string | null>(null);
@@ -73,13 +75,29 @@ export function ApplicationUsersModal({
   };
 
   const handleRenewLicense = async (user: ApplicationUser) => {
-    if (!user.tenant?.id || !user.subscription?.id) {
-      showToast('No se puede renovar: el usuario no tiene tenant o suscripción activa', 'error');
+    if (!user.tenant?.id) {
+      showToast('No se puede renovar: el usuario no tiene tenant asociado', 'error');
       return;
     }
 
+    if (plans.length === 0) {
+      showToast('No hay planes disponibles para renovar', 'error');
+      return;
+    }
+
+    setSelectedUser(user);
+    setShowRenewModal(true);
+  };
+
+  const handleConfirmRenew = async (planId: string) => {
+    if (!selectedUser) return;
+
     try {
-      showToast('Funcionalidad de renovación en desarrollo. Se renovará la licencia por 30 días más.', 'info');
+      await adminApi.renewLicense(selectedUser.external_user_id, planId, applicationId);
+      showToast('Licencia renovada exitosamente', 'success');
+      await loadUsers();
+      setShowRenewModal(false);
+      setSelectedUser(null);
     } catch (error) {
       console.error('Error al renovar licencia:', error);
       showToast('Error al renovar la licencia', 'error');
@@ -158,6 +176,17 @@ export function ApplicationUsersModal({
         onConfirm={handleConfirmCancel}
         onCancel={() => {
           setShowConfirmCancel(false);
+          setSelectedUser(null);
+        }}
+      />
+
+      <RenewLicenseModal
+        isOpen={showRenewModal}
+        user={selectedUser!}
+        plans={plans}
+        onRenew={handleConfirmRenew}
+        onClose={() => {
+          setShowRenewModal(false);
           setSelectedUser(null);
         }}
       />
