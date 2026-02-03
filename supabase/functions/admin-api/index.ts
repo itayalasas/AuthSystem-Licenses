@@ -620,10 +620,10 @@ Deno.serve(async (req: Request) => {
           );
         }
 
-        // First, verify the application user exists
+        // First, verify the application user exists and get tenant_id if available
         const { data: appUser, error: appUserError } = await supabase
           .from("application_users")
-          .select("id")
+          .select("id, tenant_id")
           .eq("external_user_id", external_user_id)
           .eq("application_id", application_id)
           .maybeSingle();
@@ -658,33 +658,78 @@ Deno.serve(async (req: Request) => {
 
         console.log('Found app user:', appUser);
 
-        // Now find the tenant through tenant_applications
-        const { data: tenantApp, error: tenantAppError } = await supabase
-          .from("tenant_applications")
-          .select("tenant_id")
-          .eq("application_id", application_id)
-          .maybeSingle();
+        let tenant_id = appUser.tenant_id;
 
-        if (tenantAppError) {
-          console.error('Error finding tenant application:', tenantAppError);
-          return new Response(
-            JSON.stringify({
-              success: false,
-              error: `Database error: ${tenantAppError.message}`
-            }),
-            {
-              status: 500,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
+        // If tenant_id is not set in application_users, try to find it from existing license or subscription
+        if (!tenant_id) {
+          console.log('tenant_id not set in application_users, searching in licenses...');
+
+          // Try to find from existing license
+          const { data: existingLicense } = await supabase
+            .from("licenses")
+            .select("tenant_id")
+            .eq("application_id", application_id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (existingLicense?.tenant_id) {
+            tenant_id = existingLicense.tenant_id;
+            console.log('Found tenant_id from license:', tenant_id);
+
+            // Update application_users with tenant_id
+            await supabase
+              .from("application_users")
+              .update({ tenant_id })
+              .eq("id", appUser.id);
+          } else {
+            // Try to find from subscription
+            const { data: existingSub } = await supabase
+              .from("subscriptions")
+              .select("tenant_id")
+              .eq("application_id", application_id)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (existingSub?.tenant_id) {
+              tenant_id = existingSub.tenant_id;
+              console.log('Found tenant_id from subscription:', tenant_id);
+
+              // Update application_users with tenant_id
+              await supabase
+                .from("application_users")
+                .update({ tenant_id })
+                .eq("id", appUser.id);
+            } else {
+              // Last resort: get any tenant for this application
+              const { data: tenantApp } = await supabase
+                .from("tenant_applications")
+                .select("tenant_id")
+                .eq("application_id", application_id)
+                .limit(1)
+                .maybeSingle();
+
+              if (tenantApp?.tenant_id) {
+                tenant_id = tenantApp.tenant_id;
+                console.log('Found tenant_id from tenant_applications:', tenant_id);
+
+                // Update application_users with tenant_id
+                await supabase
+                  .from("application_users")
+                  .update({ tenant_id })
+                  .eq("id", appUser.id);
+              }
             }
-          );
+          }
         }
 
-        if (!tenantApp) {
-          console.log('No tenant found for application:', { application_id });
+        if (!tenant_id) {
+          console.log('No tenant found for user:', { external_user_id, application_id });
           return new Response(
             JSON.stringify({
               success: false,
-              error: "No tenant found for this application"
+              error: "No tenant found for this user"
             }),
             {
               status: 404,
@@ -693,8 +738,8 @@ Deno.serve(async (req: Request) => {
           );
         }
 
-        console.log('Found tenant app:', tenantApp);
-        const tenant = { id: tenantApp.tenant_id };
+        console.log('Using tenant_id:', tenant_id);
+        const tenant = { id: tenant_id };
 
         const { data: plan, error: planError } = await supabase
           .from("plans")
