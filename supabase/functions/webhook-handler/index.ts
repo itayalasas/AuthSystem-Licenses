@@ -279,6 +279,7 @@ async function processMercadoPagoEvent(supabase: any, payload: any) {
             periodEnd = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
           }
 
+          // Create payment record
           await supabase
             .from('subscription_payments')
             .insert({
@@ -297,12 +298,28 @@ async function processMercadoPagoEvent(supabase: any, payload: any) {
               metadata: {
                 webhook_event: eventType,
                 preapproval_id: preapprovalId,
+                recurring: true,
               },
             });
 
+          // Update subscription status and period
+          await supabase
+            .from('subscriptions')
+            .update({
+              status: 'active',
+              period_start: now.toISOString(),
+              period_end: periodEnd.toISOString(),
+              metadata: {
+                ...subscription.metadata,
+                last_payment_at: now.toISOString(),
+                last_payment_id: paymentId,
+              }
+            })
+            .eq('id', subscription.id);
+
           await updateOrCreateLicense(supabase, subscription.id);
 
-          console.log('✅ New payment created for subscription:', subscription.id);
+          console.log('✅ Recurring payment processed for subscription:', subscription.id);
         }
       }
     }
