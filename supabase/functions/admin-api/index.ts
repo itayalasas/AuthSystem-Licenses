@@ -664,17 +664,16 @@ Deno.serve(async (req: Request) => {
         if (!tenant_id) {
           console.log('tenant_id not set in application_users, searching in licenses...');
 
-          // Try to find from existing license
-          const { data: existingLicense } = await supabase
+          // Try to find from existing license (return array, not single)
+          const { data: licenses } = await supabase
             .from("licenses")
             .select("tenant_id")
             .eq("application_id", application_id)
             .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
+            .limit(1);
 
-          if (existingLicense?.tenant_id) {
-            tenant_id = existingLicense.tenant_id;
+          if (licenses && licenses.length > 0 && licenses[0].tenant_id) {
+            tenant_id = licenses[0].tenant_id;
             console.log('Found tenant_id from license:', tenant_id);
 
             // Update application_users with tenant_id
@@ -683,17 +682,16 @@ Deno.serve(async (req: Request) => {
               .update({ tenant_id })
               .eq("id", appUser.id);
           } else {
-            // Try to find from subscription
-            const { data: existingSub } = await supabase
+            // Try to find from subscription (return array, not single)
+            const { data: subscriptions } = await supabase
               .from("subscriptions")
               .select("tenant_id")
               .eq("application_id", application_id)
               .order("created_at", { ascending: false })
-              .limit(1)
-              .maybeSingle();
+              .limit(1);
 
-            if (existingSub?.tenant_id) {
-              tenant_id = existingSub.tenant_id;
+            if (subscriptions && subscriptions.length > 0 && subscriptions[0].tenant_id) {
+              tenant_id = subscriptions[0].tenant_id;
               console.log('Found tenant_id from subscription:', tenant_id);
 
               // Update application_users with tenant_id
@@ -702,16 +700,15 @@ Deno.serve(async (req: Request) => {
                 .update({ tenant_id })
                 .eq("id", appUser.id);
             } else {
-              // Last resort: get any tenant for this application
-              const { data: tenantApp } = await supabase
+              // Last resort: get any tenant for this application (return array, not single)
+              const { data: tenantApps } = await supabase
                 .from("tenant_applications")
                 .select("tenant_id")
                 .eq("application_id", application_id)
-                .limit(1)
-                .maybeSingle();
+                .limit(1);
 
-              if (tenantApp?.tenant_id) {
-                tenant_id = tenantApp.tenant_id;
+              if (tenantApps && tenantApps.length > 0 && tenantApps[0].tenant_id) {
+                tenant_id = tenantApps[0].tenant_id;
                 console.log('Found tenant_id from tenant_applications:', tenant_id);
 
                 // Update application_users with tenant_id
