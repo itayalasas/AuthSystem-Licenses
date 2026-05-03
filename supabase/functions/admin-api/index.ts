@@ -1176,9 +1176,8 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const frequencyType = plan.billing_cycle === "annual" ? "months" : "months";
       const frequency = plan.billing_cycle === "annual" ? 12 : 1;
-      const repetitions = plan.billing_cycle === "annual" ? 1 : 12;
+      const frequencyType = "months";
 
       const mercadopagoPayload: any = {
         reason: plan.name,
@@ -1186,7 +1185,7 @@ Deno.serve(async (req: Request) => {
           frequency: frequency,
           frequency_type: frequencyType,
           transaction_amount: parseFloat(plan.price),
-          currency_id: plan.currency || "UYU"
+          currency_id: "UYU", // MercadoPago Uruguay only accepts UYU
         },
         back_url: mercadopagoBackUrl
       };
@@ -1198,8 +1197,9 @@ Deno.serve(async (req: Request) => {
         };
       }
 
-      if (plan.billing_day && plan.billing_day >= 1 && plan.billing_day <= 31) {
+      if (plan.billing_day && plan.billing_day >= 1 && plan.billing_day <= 28) {
         mercadopagoPayload.auto_recurring.billing_day = parseInt(plan.billing_day);
+        mercadopagoPayload.auto_recurring.billing_day_proportional = true;
       }
 
       if (plan.external_reference && plan.external_reference.trim() !== '') {
