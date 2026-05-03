@@ -34,7 +34,7 @@ import { ApplicationUsersModal } from '../components/ApplicationUsersModal';
 import { ApplicationPlansModal } from '../components/ApplicationPlansModal';
 import { PlanCard } from '../components/PlanCard';
 import { PendingPaymentsView } from '../components/PendingPaymentsView';
-import { EnvironmentBadge, getEnvInfo } from '../components/EnvironmentBadge';
+import { EnvironmentBadge, useEnvInfo } from '../components/EnvironmentBadge';
 
 export function Dashboard() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -61,6 +61,7 @@ export function Dashboard() {
   const [showPlansModal, setShowPlansModal] = useState(false);
   const [selectedAppForPlans, setSelectedAppForPlans] = useState<Application | null>(null);
   const { toasts, removeToast, success, error: showError, info } = useToast();
+  const envInfo = useEnvInfo();
 
   useEffect(() => {
     const currentUser = AuthService.getUser();
@@ -354,7 +355,7 @@ export function Dashboard() {
                   <EnvironmentBadge variant="badge" />
                 </div>
                 <p className="text-xs text-gray-500 hidden sm:block">
-                  Subscription Manager · {getEnvInfo().supabaseProjectRef}
+                  Subscription Manager · {envInfo.supabaseProjectRef}
                 </p>
               </div>
             </div>
@@ -401,10 +402,10 @@ export function Dashboard() {
                       <div className="flex items-center justify-between">
                         <EnvironmentBadge variant="badge" />
                         <span className="text-xs text-gray-400 font-mono truncate ml-2">
-                          {getEnvInfo().supabaseProjectRef}
+                          {envInfo.supabaseProjectRef}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-400 mt-1 truncate">{getEnvInfo().supabaseUrl}</p>
+                      <p className="text-xs text-gray-400 mt-1 truncate">{envInfo.supabaseUrl}</p>
                     </div>
                     <button
                       onClick={handleLogout}

@@ -98,6 +98,11 @@ class ConfigService {
     return await this.fetchConfig();
   }
 
+  static getCurrentConfig(): EnvConfig | null {
+    if (this.config) return this.config;
+    return this.getCachedConfig();
+  }
+
   static getVariable(key: string): string | undefined {
     if (!this.config) {
       const cached = this.getCachedConfig();
