@@ -401,9 +401,24 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      const insertData: any = {
+        application_id: body.application_id,
+        name: body.name,
+        description: body.description || null,
+        price: body.price,
+        currency: body.currency || 'USD',
+        billing_cycle: body.billing_cycle,
+        trial_days: body.trial_days ?? 0,
+        entitlements: body.entitlements || {},
+        is_active: body.is_active !== undefined ? body.is_active : true,
+        sort_order: body.sort_order ?? 0,
+        billing_day: body.billing_day !== '' && body.billing_day != null ? parseInt(body.billing_day) : null,
+        external_reference: body.external_reference !== '' ? body.external_reference || null : null,
+      };
+
       const { data: plan, error } = await supabase
         .from("plans")
-        .insert(body)
+        .insert(insertData)
         .select()
         .single();
 
@@ -447,6 +462,14 @@ Deno.serve(async (req: Request) => {
         updateData.application_id = body.application_id;
       }
 
+      if (body.billing_day !== undefined) {
+        updateData.billing_day = body.billing_day !== '' && body.billing_day != null ? parseInt(body.billing_day) : null;
+      }
+
+      if (body.external_reference !== undefined) {
+        updateData.external_reference = body.external_reference !== '' ? body.external_reference : null;
+      }
+
       const { data: plan, error } = await supabase
         .from("plans")
         .update(updateData)
@@ -466,6 +489,9 @@ Deno.serve(async (req: Request) => {
 
     if (path.match(/^plans\/[0-9a-f-]+$/) && method === "DELETE") {
       const planId = path.split("/")[1];
+
+      await supabase.from("licenses").update({ plan_id: null }).eq("plan_id", planId);
+      await supabase.from("subscriptions").update({ plan_id: null }).eq("plan_id", planId);
 
       const { error } = await supabase
         .from("plans")
