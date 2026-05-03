@@ -1,9 +1,40 @@
+# ============================================================
+# Build por defecto (produccion)
+# ============================================================
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+# ============================================================
+# Contexto: deploy-preview y branch-deploy (testing/staging)
+# Las variables sensibles (SUPABASE_URL, ANON_KEY, etc.)
+# se configuran en Netlify > Site > Environment variables
+# usando "Scopes" por contexto (Production / Preview)
+# ============================================================
+[context.deploy-preview.environment]
+  VITE_APP_ENV = "development"
+
+[context.branch-deploy.environment]
+  VITE_APP_ENV = "development"
+
+[context.production.environment]
+  VITE_APP_ENV = "production"
+
+# ============================================================
+# Redirects SPA
+# ============================================================
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
   force = false
 
+# ============================================================
+# Security headers
+# ============================================================
 [[headers]]
   for = "/*"
   [headers.values]

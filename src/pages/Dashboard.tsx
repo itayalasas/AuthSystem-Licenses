@@ -34,6 +34,7 @@ import { ApplicationUsersModal } from '../components/ApplicationUsersModal';
 import { ApplicationPlansModal } from '../components/ApplicationPlansModal';
 import { PlanCard } from '../components/PlanCard';
 import { PendingPaymentsView } from '../components/PendingPaymentsView';
+import { EnvironmentBadge, getEnvInfo } from '../components/EnvironmentBadge';
 
 export function Dashboard() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -323,6 +324,8 @@ export function Dashboard() {
     <div className="min-h-screen bg-gray-50">
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
+      <EnvironmentBadge variant="banner" />
+
       {/* Top Navigation */}
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -346,8 +349,13 @@ export function Dashboard() {
                 <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-base sm:text-lg font-bold text-gray-900">Admin Panel</h1>
-                <p className="text-xs text-gray-500 hidden sm:block">Subscription Manager</p>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-base sm:text-lg font-bold text-gray-900">Admin Panel</h1>
+                  <EnvironmentBadge variant="badge" />
+                </div>
+                <p className="text-xs text-gray-500 hidden sm:block">
+                  Subscription Manager · {getEnvInfo().supabaseProjectRef}
+                </p>
               </div>
             </div>
 
@@ -383,10 +391,20 @@ export function Dashboard() {
                 </button>
 
                 {showUserMenu && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 animate-scale-in">
+                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-1 animate-scale-in">
                     <div className="px-4 py-3 border-b border-gray-100">
                       <p className="text-sm font-medium text-gray-900">{user.name}</p>
                       <p className="text-xs text-gray-500">{user.email}</p>
+                    </div>
+                    <div className="px-4 py-2.5 border-b border-gray-100 bg-gray-50">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Ambiente</p>
+                      <div className="flex items-center justify-between">
+                        <EnvironmentBadge variant="badge" />
+                        <span className="text-xs text-gray-400 font-mono truncate ml-2">
+                          {getEnvInfo().supabaseProjectRef}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1 truncate">{getEnvInfo().supabaseUrl}</p>
                     </div>
                     <button
                       onClick={handleLogout}
