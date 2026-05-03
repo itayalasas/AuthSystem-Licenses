@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Plus, CreditCard as Edit2, Trash2, DollarSign, Link, RefreshCw, Unlink } from 'lucide-react';
+import { X, Plus, CreditCard as Edit2, Trash2, DollarSign, Link, RefreshCw, Unlink, ToggleLeft, ToggleRight } from 'lucide-react';
 import { Application, Plan } from '../lib/admin-api';
 import { Button } from './Button';
 
@@ -14,9 +14,10 @@ interface ApplicationPlansModalProps {
   onAssignExistingPlan: (planId: string) => void;
   onSyncMercadoPago: (planId: string) => void;
   onUnsyncMercadoPago: (planId: string) => void;
+  onReactivatePlan: (planId: string) => void;
 }
 
-export function ApplicationPlansModal({ application, plans, allPlans, onClose, onAddPlan, onEditPlan, onDeletePlan, onAssignExistingPlan, onSyncMercadoPago, onUnsyncMercadoPago }: ApplicationPlansModalProps) {
+export function ApplicationPlansModal({ application, plans, allPlans, onClose, onAddPlan, onEditPlan, onDeletePlan, onAssignExistingPlan, onSyncMercadoPago, onUnsyncMercadoPago, onReactivatePlan }: ApplicationPlansModalProps) {
   const [showAssignMenu, setShowAssignMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -206,19 +207,35 @@ export function ApplicationPlansModal({ application, plans, allPlans, onClose, o
                         >
                           Editar
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            if (confirm(`¿Eliminar el plan "${plan.name}"?`)) {
-                              onDeletePlan(plan.id);
-                            }
-                          }}
-                          icon={<Trash2 size={14} />}
-                          className="text-red-600 hover:bg-red-50"
-                        >
-                          Eliminar
-                        </Button>
+                        {plan.is_active ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (confirm(`¿Desactivar el plan "${plan.name}"? El plan quedará inactivo y no podrá usarse para nuevas suscripciones.`)) {
+                                onDeletePlan(plan.id);
+                              }
+                            }}
+                            icon={<ToggleLeft size={14} />}
+                            className="text-red-600 hover:bg-red-50"
+                          >
+                            Desactivar
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (confirm(`¿Reactivar el plan "${plan.name}"?`)) {
+                                onReactivatePlan(plan.id);
+                              }
+                            }}
+                            icon={<ToggleRight size={14} />}
+                            className="text-green-700 hover:bg-green-50"
+                          >
+                            Reactivar
+                          </Button>
+                        )}
                       </div>
                       {plan.mp_preapproval_plan_id ? (
                         <div className="flex flex-col gap-1">

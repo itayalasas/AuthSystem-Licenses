@@ -490,21 +490,99 @@ Deno.serve(async (req: Request) => {
     if (path.match(/^plans\/[0-9a-f-]+$/) && method === "DELETE") {
       const planId = path.split("/")[1];
 
-      await supabase.from("licenses").update({ plan_id: null }).eq("plan_id", planId);
-      await supabase.from("subscriptions").update({ plan_id: null }).eq("plan_id", planId);
+      const { data: plan, error: planFetchError } = await supabase
+        .from("plans")
+        .select("id, name, mp_preapproval_plan_id, mp_status")
+        .eq("id", planId)
+        .single();
 
+      if (planFetchError || !plan) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Plan not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // If plan is synced with MercadoPago, mark it as cancelled there via PUT
+      if (plan.mp_preapproval_plan_id) {
+        try {
+          const config = await getConfigFromAPI();
+          const mercadopagoAccessToken = config.MERCADOPAGO_ACCESS_TOKEN;
+          if (mercadopagoAccessToken && mercadopagoAccessToken !== "your_mercadopago_access_token_here") {
+            await fetch(`https://api.mercadopago.com/preapproval_plan/${plan.mp_preapproval_plan_id}`, {
+              method: "PUT",
+              headers: {
+                "Authorization": `Bearer ${mercadopagoAccessToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ status: "inactive" }),
+            });
+          }
+        } catch (_) {
+          // Non-fatal: continue with local deactivation even if MP call fails
+        }
+      }
+
+      // Deactivate instead of hard delete to preserve data integrity
       const { error } = await supabase
         .from("plans")
-        .delete()
+        .update({ is_active: false, updated_at: new Date().toISOString() })
         .eq("id", planId);
 
       if (error) throw error;
 
       return new Response(
         JSON.stringify({ success: true }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (path.match(/^plans\/[0-9a-f-]+\/reactivate$/) && method === "POST") {
+      const planId = path.split("/")[1];
+
+      const { data: plan, error: planFetchError } = await supabase
+        .from("plans")
+        .select("id, name, mp_preapproval_plan_id")
+        .eq("id", planId)
+        .single();
+
+      if (planFetchError || !plan) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Plan not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // If synced with MP, try to reactivate there too
+      if (plan.mp_preapproval_plan_id) {
+        try {
+          const config = await getConfigFromAPI();
+          const mercadopagoAccessToken = config.MERCADOPAGO_ACCESS_TOKEN;
+          if (mercadopagoAccessToken && mercadopagoAccessToken !== "your_mercadopago_access_token_here") {
+            await fetch(`https://api.mercadopago.com/preapproval_plan/${plan.mp_preapproval_plan_id}`, {
+              method: "PUT",
+              headers: {
+                "Authorization": `Bearer ${mercadopagoAccessToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ status: "active" }),
+            });
+          }
+        } catch (_) {
+          // Non-fatal
         }
+      }
+
+      const { error } = await supabase
+        .from("plans")
+        .update({ is_active: true, updated_at: new Date().toISOString() })
+        .eq("id", planId);
+
+      if (error) throw error;
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

@@ -420,7 +420,19 @@ class AdminAPIService {
 
     const result = await response.json();
     if (!result.success) {
-      throw new Error(result.error || 'Failed to delete plan');
+      throw new Error(result.error || 'Failed to deactivate plan');
+    }
+  }
+
+  async reactivatePlan(planId: string): Promise<void> {
+    const response = await fetch(`${getAdminApiUrl()}/plans/${planId}/reactivate`, {
+      method: 'POST',
+      headers: this.headers,
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to reactivate plan');
     }
   }
 

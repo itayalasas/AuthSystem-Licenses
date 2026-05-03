@@ -286,10 +286,20 @@ export function Dashboard() {
   const handleDeletePlan = async (planId: string) => {
     try {
       await adminApi.deletePlan(planId);
-      success('Plan eliminado exitosamente');
+      success('Plan desactivado exitosamente');
       await refreshPlans();
     } catch (err) {
-      showError('Error al eliminar el plan');
+      showError('Error al desactivar el plan');
+    }
+  };
+
+  const handleReactivatePlan = async (planId: string) => {
+    try {
+      await adminApi.reactivatePlan(planId);
+      success('Plan reactivado exitosamente');
+      await refreshPlans();
+    } catch (err) {
+      showError('Error al reactivar el plan');
     }
   };
 
@@ -851,6 +861,7 @@ export function Dashboard() {
             setShowPlanModal(true);
           }}
           onDeletePlan={handleDeletePlan}
+          onReactivatePlan={handleReactivatePlan}
           onAssignExistingPlan={handleAssignExistingPlan}
           onSyncMercadoPago={handleSyncMercadoPago}
           onUnsyncMercadoPago={handleUnsyncMercadoPago}
