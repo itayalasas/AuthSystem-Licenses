@@ -1225,6 +1225,53 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    if (path.match(/^plans\/[0-9a-f-]+\/unsync-mercadopago$/) && method === "POST") {
+      const planId = path.split("/")[1];
+
+      const { data: plan, error: planError } = await supabase
+        .from("plans")
+        .select("id, name, mp_preapproval_plan_id")
+        .eq("id", planId)
+        .single();
+
+      if (planError || !plan) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Plan not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!plan.mp_preapproval_plan_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Plan is not synced with MercadoPago" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { error: updateError } = await supabase
+        .from("plans")
+        .update({
+          mp_preapproval_plan_id: null,
+          mp_status: null,
+          mp_init_point: null,
+          mp_back_url: null,
+          mp_collector_id: null,
+          mp_application_id: null,
+          mp_date_created: null,
+          mp_last_modified: null,
+          mp_response: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", planId);
+
+      if (updateError) throw updateError;
+
+      return new Response(
+        JSON.stringify({ success: true, message: `Plan "${plan.name}" unsynced from MercadoPago` }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     return new Response(
       JSON.stringify({ success: false, error: "Route not found" }),
       {

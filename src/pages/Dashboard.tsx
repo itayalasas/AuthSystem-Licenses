@@ -293,6 +293,16 @@ export function Dashboard() {
     }
   };
 
+  const handleUnsyncMercadoPago = async (planId: string) => {
+    try {
+      await adminApi.unsyncPlanFromMercadoPago(planId);
+      success('Plan desincronizado de MercadoPago. Ya podés volver a sincronizarlo.');
+      await refreshPlans();
+    } catch (err: any) {
+      showError(err?.message || 'Error al desincronizar el plan');
+    }
+  };
+
   const handleSyncMercadoPago = async (planId: string) => {
     if (!ConfigService.isMercadoPagoConfigured()) {
       showError('MercadoPago no está configurado. Por favor configura las variables MERCADOPAGO_ACCESS_TOKEN y MERCADOPAGO_BACK_URL en la API de configuración.');
@@ -843,6 +853,7 @@ export function Dashboard() {
           onDeletePlan={handleDeletePlan}
           onAssignExistingPlan={handleAssignExistingPlan}
           onSyncMercadoPago={handleSyncMercadoPago}
+          onUnsyncMercadoPago={handleUnsyncMercadoPago}
         />
       )}
     </div>

@@ -602,6 +602,18 @@ class AdminAPIService {
     return result.data;
   }
 
+  async unsyncPlanFromMercadoPago(planId: string): Promise<void> {
+    const response = await fetch(`${getAdminApiUrl()}/plans/${planId}/unsync-mercadopago`, {
+      method: 'POST',
+      headers: this.headers,
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to unsync plan from MercadoPago');
+    }
+  }
+
   async renewLicense(externalUserId: string, planId: string, applicationId: string): Promise<any> {
     const response = await fetch(`${getAdminApiUrl()}/users/assign-plan`, {
       method: 'POST',

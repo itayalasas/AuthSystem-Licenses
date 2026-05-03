@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Plus, Edit2, Trash2, DollarSign, Link, RefreshCw } from 'lucide-react';
+import { X, Plus, CreditCard as Edit2, Trash2, DollarSign, Link, RefreshCw, Unlink } from 'lucide-react';
 import { Application, Plan } from '../lib/admin-api';
 import { Button } from './Button';
 
@@ -13,9 +13,10 @@ interface ApplicationPlansModalProps {
   onDeletePlan: (planId: string) => void;
   onAssignExistingPlan: (planId: string) => void;
   onSyncMercadoPago: (planId: string) => void;
+  onUnsyncMercadoPago: (planId: string) => void;
 }
 
-export function ApplicationPlansModal({ application, plans, allPlans, onClose, onAddPlan, onEditPlan, onDeletePlan, onAssignExistingPlan, onSyncMercadoPago }: ApplicationPlansModalProps) {
+export function ApplicationPlansModal({ application, plans, allPlans, onClose, onAddPlan, onEditPlan, onDeletePlan, onAssignExistingPlan, onSyncMercadoPago, onUnsyncMercadoPago }: ApplicationPlansModalProps) {
   const [showAssignMenu, setShowAssignMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -220,9 +221,24 @@ export function ApplicationPlansModal({ application, plans, allPlans, onClose, o
                         </Button>
                       </div>
                       {plan.mp_preapproval_plan_id ? (
-                        <div className="text-xs text-green-600 flex items-center gap-1">
-                          <DollarSign size={12} />
-                          Sincronizado con MercadoPago
+                        <div className="flex flex-col gap-1">
+                          <div className="text-xs text-green-600 flex items-center gap-1">
+                            <DollarSign size={12} />
+                            Sincronizado con MercadoPago
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (confirm(`¿Desincronizar "${plan.name}" de MercadoPago? Podrás volver a sincronizarlo con nuevos datos.`)) {
+                                onUnsyncMercadoPago(plan.id);
+                              }
+                            }}
+                            icon={<Unlink size={14} />}
+                            className="text-orange-500 hover:bg-orange-50 text-xs"
+                          >
+                            Desincronizar
+                          </Button>
                         </div>
                       ) : (
                         <Button
