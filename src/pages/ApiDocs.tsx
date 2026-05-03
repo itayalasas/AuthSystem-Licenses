@@ -102,6 +102,55 @@ const API_SECTIONS: ApiSection[] = [
     ]
   },
   {
+    title: 'Planes por Aplicación',
+    description: 'Consulta los planes activos de una aplicación. Ideal para asignar un plan por defecto en sistemas externos.',
+    baseUrl: `${BASE_URL}/validation-api`,
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/plans',
+        description: 'Retorna todos los planes activos de una aplicación, incluyendo id, precio, entitlements, datos de MercadoPago y referencia externa. Ordenados por sort_order y precio.',
+        params: {
+          external_app_id: '3acde27f-74d3-465e-aaec-94ad46faa881',
+        },
+        response: {
+          success: true,
+          application: {
+            id: 'uuid-interno',
+            name: 'Mi Aplicación',
+            slug: 'mi-app',
+            external_app_id: '3acde27f-74d3-465e-aaec-94ad46faa881',
+          },
+          count: 2,
+          plans: [
+            {
+              id: 'plan-uuid-1',
+              name: 'Starter',
+              description: 'Plan inicial',
+              price: '15.00',
+              currency: 'UYU',
+              billing_cycle: 'monthly',
+              trial_days: 14,
+              entitlements: { features: [{ code: 'api_calls', name: 'API Calls', value: 1000 }] },
+              is_active: true,
+              sort_order: 0,
+              billing_day: null,
+              external_reference: null,
+              mercadopago: {
+                preapproval_plan_id: 'mp_plan_id',
+                status: 'active',
+                init_point: 'https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=...',
+                back_url: 'https://tu-app.com',
+              },
+              created_at: '2025-11-01T00:00:00Z',
+              updated_at: '2025-11-01T00:00:00Z',
+            },
+          ],
+        },
+      },
+    ],
+  },
+  {
     title: 'Tenant Onboarding',
     description: 'Registra nuevos tenants/usuarios en el sistema',
     baseUrl: `${BASE_URL}/tenant-onboarding`,

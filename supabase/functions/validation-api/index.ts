@@ -407,6 +407,104 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // GET /plans - List active plans for an application
+    if (path === '/plans' && req.method === 'GET') {
+      const external_app_id = url.searchParams.get('external_app_id');
+
+      if (!external_app_id) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'external_app_id required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { data: application } = await supabase
+        .from('applications')
+        .select('id, name, slug, external_app_id')
+        .eq('external_app_id', external_app_id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!application) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Invalid external_app_id or application not active' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { data: plans, error: plansError } = await supabase
+        .from('plans')
+        .select(`
+          id,
+          name,
+          description,
+          price,
+          currency,
+          billing_cycle,
+          trial_days,
+          entitlements,
+          is_active,
+          sort_order,
+          billing_day,
+          external_reference,
+          mp_preapproval_plan_id,
+          mp_status,
+          mp_init_point,
+          mp_back_url,
+          created_at,
+          updated_at
+        `)
+        .eq('application_id', application.id)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+        .order('price', { ascending: true });
+
+      if (plansError) throw plansError;
+
+      const enrichedPlans = await Promise.all(
+        (plans || []).map(async (plan) => {
+          const enriched = await enrichEntitlements(supabase, plan.entitlements);
+          return {
+            id: plan.id,
+            name: plan.name,
+            description: plan.description,
+            price: plan.price,
+            currency: plan.currency,
+            billing_cycle: plan.billing_cycle,
+            trial_days: plan.trial_days,
+            entitlements: enriched,
+            is_active: plan.is_active,
+            sort_order: plan.sort_order,
+            billing_day: plan.billing_day,
+            external_reference: plan.external_reference,
+            mercadopago: plan.mp_preapproval_plan_id ? {
+              preapproval_plan_id: plan.mp_preapproval_plan_id,
+              status: plan.mp_status,
+              init_point: plan.mp_init_point,
+              back_url: plan.mp_back_url,
+            } : null,
+            created_at: plan.created_at,
+            updated_at: plan.updated_at,
+          };
+        })
+      );
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          application: {
+            id: application.id,
+            name: application.name,
+            slug: application.slug,
+            external_app_id: application.external_app_id,
+          },
+          count: enrichedPlans.length,
+          plans: enrichedPlans,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // POST /record-usage - Record usage metric
     if (path === '/record-usage' && req.method === 'POST') {
       const payload = await req.json();
