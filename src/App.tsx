@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Login } from './pages/Login';
 import { AuthCallback } from './pages/AuthCallback';
+import { PaymentCallback } from './pages/PaymentCallback';
 import { Dashboard } from './pages/Dashboard';
 import { ApiDocs } from './pages/ApiDocs';
 import { AuthService } from './lib/auth';
@@ -20,6 +21,10 @@ function AppRoutes() {
 
   if (currentPath === '/callback') {
     return <AuthCallback />;
+  }
+
+  if (currentPath === '/payment-callback') {
+    return <PaymentCallback />;
   }
 
   if (currentPath === '/api-docs') {
