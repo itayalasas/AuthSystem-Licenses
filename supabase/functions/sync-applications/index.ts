@@ -89,7 +89,7 @@ Deno.serve(async (req: Request) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const externalApiUrl = "https://auth-systemv1.netlify.app/api/application/info";
+    const externalApiUrl = "https://sfqtmnncgiqkveaoqckt.supabase.co/functions/v1/application-info";
     // Try both secret names for backward compatibility
     const externalApiKey = Deno.env.get("EXTERNAL_AUTH_API_KEY") || Deno.env.get("EXTERNAL_AUTH_API_TOKEN");
 
