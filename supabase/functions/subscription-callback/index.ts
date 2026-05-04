@@ -6,7 +6,7 @@ const ACCESS_KEY = '033b6f38b0c5b902c90dbb1f371c389f967a0afa871028da2ab5657062ca
 
 // The URL of this admin panel — used as the payment-callback page host.
 // We derive it from SUPABASE_URL as a fallback, but the app's back_url takes priority.
-const ADMIN_PANEL_URL = 'https://auth-licenses.netlify.app';
+const ADMIN_PANEL_URL = 'https://auth-license.netlify.app';
 
 async function getConfigFromAPI(): Promise<Record<string, string>> {
   try {
