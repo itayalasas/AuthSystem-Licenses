@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Users, Mail, Calendar, Clock, CreditCard, AlertCircle, CheckCircle, XCircle, RefreshCw, Plus, UserPlus, Building2, ChevronDown, ChevronRight } from 'lucide-react';
+import { X, Users, Mail, Calendar, Clock, CreditCard, AlertCircle, CheckCircle, XCircle, RefreshCw, Plus, Building2, ChevronDown, ChevronRight, DollarSign } from 'lucide-react';
 import { Button } from './Button';
 import { AdminAPIService, ApplicationUser, TenantWithMembers, ApplicationUsersResult, License, Subscription, Plan } from '../lib/admin-api';
 import { ConfirmModal } from './ConfirmModal';
@@ -124,16 +124,20 @@ function TenantCard({
   tenant,
   plans,
   assigningPlan,
+  registeringPayment,
   onRenew,
   onCancelSubscription,
   onAssignPlan,
+  onRegisterPayment,
 }: {
   tenant: TenantWithMembers;
   plans: Plan[];
   assigningPlan: string | null;
+  registeringPayment: string | null;
   onRenew: (tenant: TenantWithMembers) => void;
   onCancelSubscription: (tenant: TenantWithMembers) => void;
   onAssignPlan: (tenant: TenantWithMembers, planId: string) => void;
+  onRegisterPayment: (tenant: TenantWithMembers) => void;
 }) {
   const [membersOpen, setMembersOpen] = useState(false);
 
@@ -162,20 +166,34 @@ function TenantCard({
             {tenant.subscription && <SubscriptionBlock subscription={tenant.subscription} />}
             {tenant.license && <LicenseBlock license={tenant.license} />}
 
-            <div className="flex gap-2 pt-1">
+            <div className="flex gap-2 pt-1 flex-wrap">
+              {tenant.subscription?.status === 'trialing' && (
+                <button
+                  className="flex-1 min-w-[120px] px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-lg transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  onClick={() => onRegisterPayment(tenant)}
+                  disabled={registeringPayment === tenant.id}
+                >
+                  {registeringPayment === tenant.id ? (
+                    <div className="w-3 h-3 border border-green-700 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <DollarSign size={13} />
+                  )}
+                  Registrar Pago
+                </button>
+              )}
               <button
-                className="flex-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                className="flex-1 min-w-[120px] px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center justify-center gap-1.5"
                 onClick={() => onRenew(tenant)}
               >
                 <RefreshCw size={13} />
-                Renovar Licencia
+                Cambiar Plan
               </button>
               <button
-                className="flex-1 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                className="flex-1 min-w-[120px] px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center justify-center gap-1.5"
                 onClick={() => onCancelSubscription(tenant)}
               >
                 <XCircle size={13} />
-                Cancelar Suscripción
+                Cancelar
               </button>
             </div>
           </div>
@@ -277,6 +295,7 @@ export function ApplicationUsersModal({
   const [selectedTenant, setSelectedTenant] = useState<TenantWithMembers | null>(null);
   const [assigningPlan, setAssigningPlan] = useState<string | null>(null);
   const [creatingTenant, setCreatingTenant] = useState<string | null>(null);
+  const [registeringPayment, setRegisteringPayment] = useState<string | null>(null);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -320,11 +339,14 @@ export function ApplicationUsersModal({
 
   const handleConfirmRenew = async (planId: string) => {
     const externalUserId = selectedUser?.external_user_id || selectedTenant?.owner_user_id;
-    if (!externalUserId) return;
+    if (!externalUserId) {
+      showToast('No se encontró el usuario asociado al tenant', 'error');
+      return;
+    }
 
     try {
-      await adminApi.renewLicense(externalUserId, planId, applicationId);
-      showToast('Licencia renovada exitosamente', 'success');
+      await adminApi.renewLicense(externalUserId, planId, applicationId, true);
+      showToast('Plan asignado y activado exitosamente', 'success');
       await loadUsers();
       setShowRenewModal(false);
       setSelectedUser(null);
@@ -332,6 +354,20 @@ export function ApplicationUsersModal({
     } catch (error: any) {
       showToast(error?.message || 'Error al renovar la licencia', 'error');
       throw error;
+    }
+  };
+
+  const handleRegisterPayment = async (tenant: TenantWithMembers) => {
+    if (!tenant.id) return;
+    try {
+      setRegisteringPayment(tenant.id);
+      await adminApi.registerPayment(tenant.id, applicationId);
+      showToast('Pago registrado y suscripción activada exitosamente', 'success');
+      await loadUsers();
+    } catch (error: any) {
+      showToast(error?.message || 'Error al registrar el pago', 'error');
+    } finally {
+      setRegisteringPayment(null);
     }
   };
 
@@ -475,9 +511,11 @@ export function ApplicationUsersModal({
                       tenant={tenant}
                       plans={plans}
                       assigningPlan={assigningPlan}
+                      registeringPayment={registeringPayment}
                       onRenew={handleRenewForTenant}
                       onCancelSubscription={handleCancelForTenant}
                       onAssignPlan={handleAssignPlanToTenant}
+                      onRegisterPayment={handleRegisterPayment}
                     />
                   ))}
                 </div>

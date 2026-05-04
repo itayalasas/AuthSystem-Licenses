@@ -827,9 +827,9 @@ Deno.serve(async (req: Request) => {
     if (path === "users/assign-plan" && method === "POST") {
       try {
         const body = await req.json();
-        const { external_user_id, plan_id, application_id } = body;
+        const { external_user_id, plan_id, application_id, force_active } = body;
 
-        console.log('Assign plan request:', { external_user_id, plan_id, application_id });
+        console.log('Assign plan request:', { external_user_id, plan_id, application_id, force_active });
 
         if (!external_user_id || !plan_id || !application_id) {
           return new Response(
@@ -887,64 +887,59 @@ Deno.serve(async (req: Request) => {
 
         let tenant_id = appUser.tenant_id;
 
-        // If tenant_id is not set in application_users, try to find it from existing license or subscription
+        // If tenant_id is not set in application_users, try to find it by owner_user_id or owner_email
         if (!tenant_id) {
-          console.log('tenant_id not set in application_users, searching in licenses...');
+          console.log('tenant_id not set in application_users, searching by owner...');
 
-          // Try to find from existing license (return array, not single)
-          const { data: licenses } = await supabase
-            .from("licenses")
-            .select("tenant_id")
-            .eq("application_id", application_id)
-            .order("created_at", { ascending: false })
-            .limit(1);
+          // First: look for a tenant owned by this user
+          const { data: tenantByOwner } = await supabase
+            .from("tenants")
+            .select("id")
+            .eq("owner_user_id", external_user_id)
+            .maybeSingle();
 
-          if (licenses && licenses.length > 0 && licenses[0].tenant_id) {
-            tenant_id = licenses[0].tenant_id;
-            console.log('Found tenant_id from license:', tenant_id);
+          if (tenantByOwner) {
+            tenant_id = tenantByOwner.id;
+            console.log('Found tenant_id from owner_user_id:', tenant_id);
+          } else {
+            // Second: look via tenant_members
+            const { data: memberTenant } = await supabase
+              .from("tenant_members")
+              .select("tenant_id")
+              .eq("user_id", external_user_id)
+              .maybeSingle();
 
-            // Update application_users with tenant_id
+            if (memberTenant) {
+              tenant_id = memberTenant.tenant_id;
+              console.log('Found tenant_id from tenant_members:', tenant_id);
+            } else {
+              // Third: look by email in application_users
+              const { data: userInfo } = await supabase
+                .from("application_users")
+                .select("email")
+                .eq("id", appUser.id)
+                .maybeSingle();
+
+              if (userInfo?.email) {
+                const { data: tenantByEmail } = await supabase
+                  .from("tenants")
+                  .select("id")
+                  .eq("owner_email", userInfo.email)
+                  .maybeSingle();
+
+                if (tenantByEmail) {
+                  tenant_id = tenantByEmail.id;
+                  console.log('Found tenant_id from owner_email:', tenant_id);
+                }
+              }
+            }
+          }
+
+          if (tenant_id) {
             await supabase
               .from("application_users")
               .update({ tenant_id })
               .eq("id", appUser.id);
-          } else {
-            // Try to find from subscription (return array, not single)
-            const { data: subscriptions } = await supabase
-              .from("subscriptions")
-              .select("tenant_id")
-              .eq("application_id", application_id)
-              .order("created_at", { ascending: false })
-              .limit(1);
-
-            if (subscriptions && subscriptions.length > 0 && subscriptions[0].tenant_id) {
-              tenant_id = subscriptions[0].tenant_id;
-              console.log('Found tenant_id from subscription:', tenant_id);
-
-              // Update application_users with tenant_id
-              await supabase
-                .from("application_users")
-                .update({ tenant_id })
-                .eq("id", appUser.id);
-            } else {
-              // Last resort: get any tenant for this application (return array, not single)
-              const { data: tenantApps } = await supabase
-                .from("tenant_applications")
-                .select("tenant_id")
-                .eq("application_id", application_id)
-                .limit(1);
-
-              if (tenantApps && tenantApps.length > 0 && tenantApps[0].tenant_id) {
-                tenant_id = tenantApps[0].tenant_id;
-                console.log('Found tenant_id from tenant_applications:', tenant_id);
-
-                // Update application_users with tenant_id
-                await supabase
-                  .from("application_users")
-                  .update({ tenant_id })
-                  .eq("id", appUser.id);
-              }
-            }
           }
         }
 
@@ -1030,17 +1025,26 @@ Deno.serve(async (req: Request) => {
 
         let subscription;
 
+        const useTrial = plan.trial_days > 0 && !force_active;
+        const periodEnd = plan.billing_cycle === "annual"
+          ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
         if (existingSubscription) {
           console.log('Updating existing subscription');
           const { data: updatedSub, error: updateError } = await supabase
             .from("subscriptions")
             .update({
               plan_id: plan_id,
-              status: plan.trial_days > 0 ? "trialing" : "active",
-              trial_start: plan.trial_days > 0 ? new Date().toISOString() : null,
-              trial_end: plan.trial_days > 0
+              status: useTrial ? "trialing" : "active",
+              trial_start: useTrial ? new Date().toISOString() : null,
+              trial_end: useTrial
                 ? new Date(Date.now() + plan.trial_days * 24 * 60 * 60 * 1000).toISOString()
                 : null,
+              current_period_start: new Date().toISOString(),
+              current_period_end: periodEnd,
+              period_start: new Date().toISOString(),
+              period_end: periodEnd,
             })
             .eq("id", existingSubscription.id)
             .select()
@@ -1063,13 +1067,9 @@ Deno.serve(async (req: Request) => {
           console.log('Subscription updated:', subscription);
         } else {
           console.log('Creating new subscription');
-          const trial_end = plan.trial_days > 0
+          const trial_end = useTrial
             ? new Date(Date.now() + plan.trial_days * 24 * 60 * 60 * 1000).toISOString()
             : null;
-
-          const period_end = plan.billing_cycle === "annual"
-            ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
-            : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
           const { data: newSub, error: createError } = await supabase
             .from("subscriptions")
@@ -1077,12 +1077,12 @@ Deno.serve(async (req: Request) => {
               tenant_id: tenant.id,
               plan_id: plan_id,
               application_id: application_id,
-              status: plan.trial_days > 0 ? "trialing" : "active",
+              status: useTrial ? "trialing" : "active",
               period_start: new Date().toISOString(),
-              period_end: period_end,
+              period_end: periodEnd,
               current_period_start: new Date().toISOString(),
-              current_period_end: period_end,
-              trial_start: plan.trial_days > 0 ? new Date().toISOString() : null,
+              current_period_end: periodEnd,
+              trial_start: useTrial ? new Date().toISOString() : null,
               trial_end: trial_end,
             })
             .select()
@@ -1128,13 +1128,11 @@ Deno.serve(async (req: Request) => {
             subscription_id: subscription.id,
             plan_id: plan_id,
             license_key: license_key,
-            type: plan.trial_days > 0 ? "trial" : "paid",
-            status: plan.trial_days > 0 ? "trial" : "active",
-            expires_at: plan.trial_days > 0
+            type: useTrial ? "trial" : "paid",
+            status: useTrial ? "trial" : "active",
+            expires_at: useTrial
               ? new Date(Date.now() + plan.trial_days * 24 * 60 * 60 * 1000).toISOString()
-              : (plan.billing_cycle === "annual"
-                  ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
-                  : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()),
+              : periodEnd,
           }, {
             onConflict: "tenant_id, application_id",
           })
@@ -1181,6 +1179,96 @@ Deno.serve(async (req: Request) => {
             status: 500,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           }
+        );
+      }
+    }
+
+    // POST tenants/register-payment - Register a manual payment and activate subscription
+    if (path === "tenants/register-payment" && method === "POST") {
+      try {
+        const body = await req.json();
+        const { tenant_id, application_id, amount, currency, payment_method, notes } = body;
+
+        if (!tenant_id || !application_id) {
+          return new Response(
+            JSON.stringify({ success: false, error: "tenant_id and application_id are required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Get the active/trialing subscription
+        const { data: subscription, error: subError } = await supabase
+          .from("subscriptions")
+          .select("*, plan:plans(*)")
+          .eq("tenant_id", tenant_id)
+          .eq("application_id", application_id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (subError || !subscription) {
+          return new Response(
+            JSON.stringify({ success: false, error: "No subscription found for this tenant and application" }),
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const plan = subscription.plan;
+        const now = new Date();
+        const periodEnd = plan.billing_cycle === "annual"
+          ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString()
+          : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+        // Insert completed payment record — triggers auto_activate_subscription_on_payment
+        const { data: payment, error: paymentError } = await supabase
+          .from("subscription_payments")
+          .insert({
+            subscription_id: subscription.id,
+            tenant_id: tenant_id,
+            plan_id: subscription.plan_id,
+            amount: amount ?? plan.price,
+            currency: currency ?? plan.currency ?? "USD",
+            status: "completed",
+            payment_method: payment_method ?? "manual",
+            payment_provider: "manual",
+            paid_at: now.toISOString(),
+            period_start: now.toISOString(),
+            period_end: periodEnd,
+            metadata: {
+              registered_by: "admin",
+              notes: notes ?? null,
+              registered_at: now.toISOString(),
+            },
+          })
+          .select()
+          .single();
+
+        if (paymentError) throw paymentError;
+
+        // Also update license to paid/active
+        await supabase
+          .from("licenses")
+          .update({
+            type: "paid",
+            status: "active",
+            expires_at: periodEnd,
+          })
+          .eq("tenant_id", tenant_id)
+          .eq("application_id", application_id);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: { payment_id: payment.id, subscription_id: subscription.id },
+            message: "Payment registered and subscription activated",
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (error) {
+        console.error("Error in register-payment:", error);
+        return new Response(
+          JSON.stringify({ success: false, error: error instanceof Error ? error.message : "Internal server error" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }

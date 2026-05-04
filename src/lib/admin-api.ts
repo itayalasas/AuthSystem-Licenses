@@ -659,20 +659,48 @@ class AdminAPIService {
     }
   }
 
-  async renewLicense(externalUserId: string, planId: string, applicationId: string): Promise<any> {
+  async renewLicense(externalUserId: string, planId: string, applicationId: string, forceActive = false): Promise<any> {
     const response = await fetch(`${getAdminApiUrl()}/users/assign-plan`, {
       method: 'POST',
       headers: this.headers,
       body: JSON.stringify({
         external_user_id: externalUserId,
         plan_id: planId,
-        application_id: applicationId
+        application_id: applicationId,
+        force_active: forceActive,
       }),
     });
 
     const result = await response.json();
     if (!result.success) {
       throw new Error(result.error || 'Failed to renew license');
+    }
+
+    return result.data;
+  }
+
+  async registerPayment(tenantId: string, applicationId: string, options?: {
+    amount?: number;
+    currency?: string;
+    paymentMethod?: string;
+    notes?: string;
+  }): Promise<any> {
+    const response = await fetch(`${getAdminApiUrl()}/tenants/register-payment`, {
+      method: 'POST',
+      headers: this.headers,
+      body: JSON.stringify({
+        tenant_id: tenantId,
+        application_id: applicationId,
+        amount: options?.amount,
+        currency: options?.currency,
+        payment_method: options?.paymentMethod ?? 'manual',
+        notes: options?.notes,
+      }),
+    });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to register payment');
     }
 
     return result.data;
