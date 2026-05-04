@@ -101,26 +101,22 @@ Deno.serve(async (req: Request) => {
       application = appData;
     }
 
-    // Step 4 — Redirect to the application's back_url with payment params,
-    // or fall back to the admin panel payment-callback page if no back_url is set.
-    const appBackUrl = application?.back_url || globalBackUrl;
+    // Step 4 — Redirect to the admin panel /payment-callback page.
+    // That page shows a loader, validates the payment, and then redirects
+    // the user to the application's configured back_url.
+    const adminCallbackUrl = new URL(`${ADMIN_PANEL_URL}/payment-callback`);
+    adminCallbackUrl.searchParams.set("subscription_status", mpStatus);
+    if (preapprovalId) adminCallbackUrl.searchParams.set("preapproval_id", preapprovalId);
+    if (subscription?.id) adminCallbackUrl.searchParams.set("subscription_id", subscription.id);
+    if (plan?.id) adminCallbackUrl.searchParams.set("plan_id", plan.id);
+    if (plan?.name) adminCallbackUrl.searchParams.set("plan_name", plan.name);
 
-    const params = new URLSearchParams();
-    params.set("subscription_status", mpStatus);
-    if (preapprovalId) params.set("preapproval_id", preapprovalId);
-    if (subscription?.id) params.set("subscription_id", subscription.id);
-    if (plan?.id) params.set("plan_id", plan.id);
-    if (plan?.name) params.set("plan_name", plan.name);
-
-    if (appBackUrl) {
-      const destination = new URL(appBackUrl);
-      params.forEach((value, key) => destination.searchParams.set(key, value));
-      return redirect(destination.toString());
+    // Pass the final destination so the /payment-callback page can redirect the user there
+    const finalDestination = application?.back_url || globalBackUrl;
+    if (finalDestination) {
+      adminCallbackUrl.searchParams.set("back_url", finalDestination);
     }
 
-    // Fallback: use the admin panel payment-callback page
-    const adminCallbackUrl = new URL(`${ADMIN_PANEL_URL}/payment-callback`);
-    params.forEach((value, key) => adminCallbackUrl.searchParams.set(key, value));
     return redirect(adminCallbackUrl.toString());
 
   } catch (err: any) {
