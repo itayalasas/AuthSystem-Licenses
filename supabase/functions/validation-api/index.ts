@@ -48,6 +48,13 @@ async function enrichEntitlements(supabase: any, entitlements: any) {
   return { features: enrichedFeatures };
 }
 
+function buildCallbackUrl(supabaseUrl: string, applicationId: string): string {
+  const base = `${supabaseUrl}/functions/v1/admin-api/subscription-callback`;
+  const u = new URL(base);
+  u.searchParams.set('app_id', applicationId);
+  return u.toString();
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -210,7 +217,7 @@ Deno.serve(async (req: Request) => {
                 is_upgrade: plan.price > subscription.plan.price,
                 price_difference: plan.price - subscription.plan.price,
                 mp_init_point: plan.mp_init_point,
-                mp_back_url: plan.mp_back_url,
+                mp_back_url: buildCallbackUrl(supabaseUrl, application.id),
                 mp_preapproval_plan_id: plan.mp_preapproval_plan_id,
                 mp_status: plan.mp_status,
               };
@@ -243,7 +250,7 @@ Deno.serve(async (req: Request) => {
             period_end: subscription.period_end,
             entitlements: enrichedEntitlements,
             mp_init_point: subscription.plan?.mp_init_point,
-            mp_back_url: subscription.plan?.mp_back_url,
+            mp_back_url: buildCallbackUrl(supabaseUrl, application.id),
             mp_preapproval_plan_id: subscription.plan?.mp_preapproval_plan_id,
             mp_status: subscription.plan?.mp_status,
           } : null,
@@ -420,7 +427,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: application } = await supabase
         .from('applications')
-        .select('id, name, slug, external_app_id')
+        .select('id, name, slug, external_app_id, back_url')
         .eq('external_app_id', external_app_id)
         .eq('is_active', true)
         .maybeSingle();
@@ -481,7 +488,7 @@ Deno.serve(async (req: Request) => {
               preapproval_plan_id: plan.mp_preapproval_plan_id,
               status: plan.mp_status,
               init_point: plan.mp_init_point,
-              back_url: plan.mp_back_url,
+              back_url: buildCallbackUrl(supabaseUrl, application.id),
             } : null,
             created_at: plan.created_at,
             updated_at: plan.updated_at,
