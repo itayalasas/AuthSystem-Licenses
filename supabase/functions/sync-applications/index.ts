@@ -321,24 +321,41 @@ Deno.serve(async (req: Request) => {
           let sharedTenantId = existingShared?.id;
 
           if (!sharedTenantId) {
-            // Try to find by slug in case tenant was auto-created without auth_tenant_id
-            const { data: bySlug } = await supabase
-              .from("tenants")
-              .select("id")
-              .eq("slug", extTenant.slug)
-              .maybeSingle();
+            // Try by slug first
+            let foundExisting: { id: string } | null = null;
 
-            if (bySlug) {
-              // Claim this tenant by setting auth_tenant_id
+            if (extTenant.slug) {
+              const { data: bySlug } = await supabase
+                .from("tenants")
+                .select("id")
+                .eq("slug", extTenant.slug)
+                .maybeSingle();
+              if (bySlug) foundExisting = bySlug;
+            }
+
+            // Fallback: match by name (case-insensitive) when slug didn't match
+            if (!foundExisting) {
+              const { data: byName } = await supabase
+                .from("tenants")
+                .select("id")
+                .ilike("name", extTenant.name)
+                .is("auth_tenant_id", null)
+                .maybeSingle();
+              if (byName) foundExisting = byName;
+            }
+
+            if (foundExisting) {
+              // Claim this tenant by setting auth_tenant_id and syncing fields
               await supabase.from("tenants").update({
                 auth_tenant_id: extTenant.id,
                 name: extTenant.name,
+                slug: extTenant.slug,
                 domain: extTenant.domain,
                 status: extTenant.status,
-              }).eq("id", bySlug.id);
-              sharedTenantId = bySlug.id;
+              }).eq("id", foundExisting.id);
+              sharedTenantId = foundExisting.id;
               results.tenants_updated++;
-              console.log(`Claimed existing tenant ${extTenant.name} (by slug)`);
+              console.log(`Claimed existing tenant ${extTenant.name} (id: ${sharedTenantId})`);
             } else {
               const { data: newShared, error: sharedErr } = await supabase
                 .from("tenants")
