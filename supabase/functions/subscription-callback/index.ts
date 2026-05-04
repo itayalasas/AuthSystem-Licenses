@@ -263,42 +263,12 @@ Deno.serve(async (req: Request) => {
         await updateOrCreateLicense(supabase, subscription.id);
         console.log("Updated subscription:", subscription.id, "plan:", plan.id);
       } else {
-        // No encontramos la suscripcion por ID: buscar cualquier suscripcion trial/pending
-        // del tenant para esta aplicacion y actualizarla al nuevo plan
-        const resolvedAppId = plan.application_id || appId;
-        const { data: subToUpdate } = await supabase
-          .from("subscriptions")
-          .select("id, tenant_id")
-          .in("plan_id",
-            (await supabase
-              .from("plans")
-              .select("id")
-              .eq("application_id", resolvedAppId)
-            ).data?.map((p: any) => p.id) ?? []
-          )
-          .is("mp_preapproval_id", null)
-          .in("status", ["trialing", "active", "pending"])
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (subToUpdate) {
-          await supabase
-            .from("subscriptions")
-            .update({
-              plan_id: plan.id,
-              status: "active",
-              period_start: now.toISOString(),
-              period_end: periodEnd.toISOString(),
-              mp_preapproval_id: preapprovalId,
-              payment_provider: "mercadopago",
-            })
-            .eq("id", subToUpdate.id);
-
-          await updateOrCreateLicense(supabase, subToUpdate.id);
-          subscription = subToUpdate;
-          console.log("Linked preapproval to subscription:", subToUpdate.id, "new plan:", plan.id);
-        }
+        // No encontramos la suscripcion por subscription_id ni mp_preapproval_id.
+        // Intentar encontrar el tenant via external_reference desde MP para no aplicar
+        // el pago al tenant equivocado.
+        console.log("Subscription not found by ID or preapproval_id — cannot safely activate without tenant context");
+        // No hacemos fallback genérico. El webhook handler se encargará de reconciliar
+        // cuando MP envíe la notificación con el preapproval_id correcto.
       }
     }
 

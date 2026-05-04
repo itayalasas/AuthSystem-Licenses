@@ -87,46 +87,80 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      // Find the user's subscription
+      // Find the user's application record
       const { data: appUser } = await supabase
         .from("application_users")
-        .select("*, tenant:tenants(*)")
+        .select("*")
         .eq("external_user_id", external_user_id)
         .eq("application_id", application.id)
         .maybeSingle();
 
-      if (!appUser || !appUser.tenant) {
+      if (!appUser) {
         return new Response(
-          JSON.stringify({
-            success: false,
-            error: "User not found in this application"
-          }),
-          {
-            status: 404,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          JSON.stringify({ success: false, error: "User not found in this application" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Find the subscription
+      // Resolve tenant_id — appUser.tenant_id may be null for shared-tenant users
+      let tenantId: string | null = appUser.tenant_id;
+
+      if (!tenantId) {
+        // 1. Tenant owned by this user
+        const { data: ownedTenant } = await supabase
+          .from("tenants")
+          .select("id")
+          .eq("owner_user_id", external_user_id)
+          .maybeSingle();
+        if (ownedTenant) tenantId = ownedTenant.id;
+      }
+
+      if (!tenantId) {
+        // 2. Tenant via tenant_members (shared tenant)
+        const { data: memberRecord } = await supabase
+          .from("tenant_members")
+          .select("tenant_id")
+          .eq("external_user_id", external_user_id)
+          .eq("application_id", application.id)
+          .maybeSingle();
+        if (memberRecord) tenantId = memberRecord.tenant_id;
+      }
+
+      if (!tenantId) {
+        // 3. Tenant via owner_email
+        const { data: emailTenant } = await supabase
+          .from("tenants")
+          .select("id")
+          .eq("owner_email", appUser.email)
+          .maybeSingle();
+        if (emailTenant) tenantId = emailTenant.id;
+      }
+
+      if (!tenantId) {
+        return new Response(
+          JSON.stringify({ success: false, error: "No tenant found for this user" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Update application_users with resolved tenant_id for future calls
+      if (!appUser.tenant_id) {
+        await supabase.from("application_users").update({ tenant_id: tenantId }).eq("id", appUser.id);
+      }
+
+      // Find the subscription for this specific tenant
       const { data: subscription } = await supabase
         .from("subscriptions")
         .select("*, plan:plans(*)")
-        .eq("tenant_id", appUser.tenant_id)
+        .eq("tenant_id", tenantId)
         .eq("application_id", application.id)
         .order("created_at", { ascending: false })
         .maybeSingle();
 
       if (!subscription) {
         return new Response(
-          JSON.stringify({
-            success: false,
-            error: "No subscription found for this user"
-          }),
-          {
-            status: 404,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          JSON.stringify({ success: false, error: "No subscription found for this user" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
