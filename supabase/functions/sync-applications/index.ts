@@ -321,31 +321,51 @@ Deno.serve(async (req: Request) => {
           let sharedTenantId = existingShared?.id;
 
           if (!sharedTenantId) {
-            const { data: newShared, error: sharedErr } = await supabase
+            // Try to find by slug in case tenant was auto-created without auth_tenant_id
+            const { data: bySlug } = await supabase
               .from("tenants")
-              .insert({
-                name: extTenant.name,
-                slug: extTenant.slug,
-                domain: extTenant.domain,
-                auth_tenant_id: extTenant.id,
-                status: extTenant.status,
-                metadata: {
-                  auto_created: true,
-                  shared_tenant: true,
-                  synced_at: new Date().toISOString(),
-                },
-              })
               .select("id")
-              .single();
+              .eq("slug", extTenant.slug)
+              .maybeSingle();
 
-            if (sharedErr || !newShared) {
-              results.errors.push(`Failed to create shared tenant ${extTenant.name}: ${sharedErr?.message}`);
-              continue;
+            if (bySlug) {
+              // Claim this tenant by setting auth_tenant_id
+              await supabase.from("tenants").update({
+                auth_tenant_id: extTenant.id,
+                name: extTenant.name,
+                domain: extTenant.domain,
+                status: extTenant.status,
+              }).eq("id", bySlug.id);
+              sharedTenantId = bySlug.id;
+              results.tenants_updated++;
+              console.log(`Claimed existing tenant ${extTenant.name} (by slug)`);
+            } else {
+              const { data: newShared, error: sharedErr } = await supabase
+                .from("tenants")
+                .insert({
+                  name: extTenant.name,
+                  slug: extTenant.slug,
+                  domain: extTenant.domain,
+                  auth_tenant_id: extTenant.id,
+                  status: extTenant.status,
+                  metadata: {
+                    auto_created: true,
+                    shared_tenant: true,
+                    synced_at: new Date().toISOString(),
+                  },
+                })
+                .select("id")
+                .single();
+
+              if (sharedErr || !newShared) {
+                results.errors.push(`Failed to create shared tenant ${extTenant.name}: ${sharedErr?.message}`);
+                continue;
+              }
+
+              sharedTenantId = newShared.id;
+              results.tenants_created++;
+              console.log(`Created shared tenant: ${extTenant.name}`);
             }
-
-            sharedTenantId = newShared.id;
-            results.tenants_created++;
-            console.log(`Created shared tenant: ${extTenant.name}`);
           } else {
             // Update name/domain in case they changed
             await supabase.from("tenants").update({
