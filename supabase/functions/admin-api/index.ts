@@ -609,6 +609,15 @@ Deno.serve(async (req: Request) => {
     if (path.match(/^applications\/[0-9a-f-]+\/users$/) && req.method === "GET") {
       const applicationId = path.split("/")[1];
 
+      // Get application to know auth_type
+      const { data: application } = await supabase
+        .from("applications")
+        .select("id, name, auth_type")
+        .eq("id", applicationId)
+        .maybeSingle();
+
+      const authType = application?.auth_type || "basic";
+
       const { data: users, error } = await supabase
         .from("application_users")
         .select("*")
@@ -617,6 +626,118 @@ Deno.serve(async (req: Request) => {
 
       if (error) throw error;
 
+      // For tenant-type apps, group users by tenant
+      if (authType === "tenant" || authType === "hybrid") {
+        // Get all tenants that have members in this application
+        const { data: tenantMembers } = await supabase
+          .from("tenant_members")
+          .select("tenant_id, external_user_id, email, name, status, last_login, created_at")
+          .eq("application_id", applicationId);
+
+        // Get all tenants for this application via tenant_applications
+        const { data: tenantApps } = await supabase
+          .from("tenant_applications")
+          .select(`
+            tenant_id,
+            subscription:subscriptions(
+              id,
+              status,
+              trial_end,
+              period_end,
+              period_start,
+              plan:plans(
+                id,
+                name,
+                price,
+                currency,
+                billing_cycle
+              )
+            ),
+            tenant:tenants(
+              id,
+              name,
+              status,
+              owner_user_id,
+              created_at
+            )
+          `)
+          .eq("application_id", applicationId);
+
+        // Build tenant list with members and licenses
+        const tenantsById = new Map<string, any>();
+
+        for (const ta of (tenantApps || [])) {
+          const tenant = ta.tenant as any;
+          if (!tenant) continue;
+
+          const { data: license } = await supabase
+            .from("licenses")
+            .select("*")
+            .eq("tenant_id", tenant.id)
+            .eq("application_id", applicationId)
+            .maybeSingle();
+
+          const members = (tenantMembers || [])
+            .filter((m: any) => m.tenant_id === tenant.id)
+            .map((m: any) => ({
+              external_user_id: m.external_user_id,
+              email: m.email,
+              name: m.name,
+              status: m.status,
+              last_login: m.last_login,
+              created_at: m.created_at,
+            }));
+
+          tenantsById.set(tenant.id, {
+            id: tenant.id,
+            name: tenant.name,
+            status: tenant.status,
+            owner_user_id: tenant.owner_user_id,
+            created_at: tenant.created_at,
+            subscription: ta.subscription || null,
+            license: license || null,
+            members,
+          });
+        }
+
+        // Also include tenants found via application_users that may not have tenant_applications yet
+        for (const user of (users || [])) {
+          const { data: tenant } = await supabase
+            .from("tenants")
+            .select("id, name, status, owner_user_id, created_at")
+            .eq("owner_user_id", user.external_user_id)
+            .maybeSingle();
+
+          if (tenant && !tenantsById.has(tenant.id)) {
+            tenantsById.set(tenant.id, {
+              id: tenant.id,
+              name: tenant.name,
+              status: tenant.status,
+              owner_user_id: tenant.owner_user_id,
+              created_at: tenant.created_at,
+              subscription: null,
+              license: null,
+              members: [{
+                external_user_id: user.external_user_id,
+                email: user.email,
+                name: user.name,
+                status: user.status,
+                last_login: user.last_login,
+                created_at: user.created_at,
+              }],
+            });
+          }
+        }
+
+        const tenants = Array.from(tenantsById.values());
+
+        return new Response(
+          JSON.stringify({ success: true, data: tenants, mode: "tenant", total_users: (users || []).length }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Basic mode: flat list of users with their own subscription/license
       const enrichedUsers = await Promise.all(
         (users || []).map(async (user) => {
           const { data: tenant } = await supabase
@@ -636,6 +757,7 @@ Deno.serve(async (req: Request) => {
                 status,
                 trial_end,
                 period_end,
+                period_start,
                 plan:plans(
                   id,
                   name,
@@ -666,10 +788,8 @@ Deno.serve(async (req: Request) => {
       );
 
       return new Response(
-        JSON.stringify({ success: true, data: enrichedUsers }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        JSON.stringify({ success: true, data: enrichedUsers, mode: "basic", total_users: enrichedUsers.length }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

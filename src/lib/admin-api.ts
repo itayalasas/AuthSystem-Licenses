@@ -48,6 +48,32 @@ interface ApplicationUser {
   license?: License;
 }
 
+interface TenantMember {
+  external_user_id: string;
+  email: string;
+  name: string;
+  status: string;
+  last_login?: string;
+  created_at: string;
+}
+
+interface TenantWithMembers {
+  id: string;
+  name: string;
+  status: string;
+  owner_user_id: string;
+  created_at: string;
+  subscription?: Subscription;
+  license?: License;
+  members: TenantMember[];
+}
+
+interface ApplicationUsersResult {
+  mode: 'basic' | 'tenant';
+  total_users: number;
+  data: ApplicationUser[] | TenantWithMembers[];
+}
+
 interface Application {
   id: string;
   name: string;
@@ -494,7 +520,7 @@ class AdminAPIService {
     return result.data;
   }
 
-  async getApplicationUsers(applicationId: string): Promise<ApplicationUser[]> {
+  async getApplicationUsers(applicationId: string): Promise<ApplicationUsersResult> {
     const response = await fetch(`${getAdminApiUrl()}/applications/${applicationId}/users`, {
       headers: this.headers,
     });
@@ -504,7 +530,11 @@ class AdminAPIService {
       throw new Error(result.error || 'Failed to fetch application users');
     }
 
-    return result.data;
+    return {
+      mode: result.mode || 'basic',
+      total_users: result.total_users || result.data?.length || 0,
+      data: result.data,
+    };
   }
 
   async assignPlanToApplication(applicationId: string, planId: string): Promise<Application> {
@@ -650,4 +680,4 @@ class AdminAPIService {
 }
 
 export { AdminAPIService };
-export type { Application, ApplicationUser, Tenant, TenantApplication, Plan, AuditLog, DashboardStats, License, Subscription, FeatureCatalog };
+export type { Application, ApplicationUser, TenantWithMembers, TenantMember, ApplicationUsersResult, Tenant, TenantApplication, Plan, AuditLog, DashboardStats, License, Subscription, FeatureCatalog };
