@@ -15,11 +15,12 @@ function buildCallbackUrl(applicationId: string): string {
 interface ApplicationModalProps {
   application?: Application;
   onClose: () => void;
-  onSave: (data: any) => Promise<void>;
+  onCreate?: (data: any) => Promise<void>;
+  onUpdate?: (data: any) => Promise<void>;
   onDelete?: (applicationId: string) => Promise<void>;
 }
 
-export function ApplicationModal({ application, onClose, onSave, onDelete }: ApplicationModalProps) {
+export function ApplicationModal({ application, onClose, onCreate, onUpdate, onDelete }: ApplicationModalProps) {
   const [formData, setFormData] = useState({
     name: application?.name || '',
     slug: application?.slug || '',
@@ -38,8 +39,11 @@ export function ApplicationModal({ application, onClose, onSave, onDelete }: App
     e.preventDefault();
     try {
       setSaving(true);
-      await onSave(formData);
-      onClose();
+      if (application) {
+        await onUpdate?.(formData);
+      } else {
+        await onCreate?.(formData);
+      }
     } catch (error) {
       console.error('Failed to save application:', error);
       showToast('Error al guardar la aplicación', 'error');
@@ -94,9 +98,9 @@ export function ApplicationModal({ application, onClose, onSave, onDelete }: App
         onCancel={() => setShowConfirmDelete(false)}
       />
 
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full">
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full my-auto">
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white rounded-t-xl z-10">
           <h2 className="text-2xl font-bold text-gray-900">
             {application ? 'Configurar Aplicación' : 'Nueva Aplicación'}
           </h2>
