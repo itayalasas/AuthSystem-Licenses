@@ -97,12 +97,22 @@ Deno.serve(async (req: Request) => {
       throw new Error("EXTERNAL_AUTH_API_KEY (or EXTERNAL_AUTH_API_TOKEN) is required but not set or empty");
     }
 
-    console.log("External API Key found, length:", externalApiKey.trim().length);
+    const trimmedKey = externalApiKey.trim();
+    console.log("External API Key found, length:", trimmedKey.length, "prefix:", trimmedKey.substring(0, 6));
 
-    const response = await fetch(externalApiUrl, {
+    // Try X-API-Key first, then fall back to Authorization: Bearer
+    let response = await fetch(externalApiUrl, {
       method: "GET",
-      headers: { "Content-Type": "application/json", "X-API-Key": externalApiKey.trim() },
+      headers: { "Content-Type": "application/json", "X-API-Key": trimmedKey },
     });
+
+    if (response.status === 401) {
+      console.log("X-API-Key returned 401, retrying with Authorization: Bearer...");
+      response = await fetch(externalApiUrl, {
+        method: "GET",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${trimmedKey}` },
+      });
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
