@@ -184,42 +184,68 @@ async function processMercadoPagoEvent(supabase: any, payload: any) {
         .maybeSingle();
 
       if (plan) {
-        // Buscar la suscripción del usuario por email
-        const { data: applicationUser } = await supabase
-          .from('application_users')
-          .select('*, tenant:tenants(*)')
-          .eq('external_user_id', payerEmail)
-          .eq('application_id', plan.application_id)
+        const now = new Date();
+        const billingCycle = plan.billing_cycle || 'monthly';
+        const periodEnd = new Date(
+          now.getTime() + (billingCycle === 'annual' ? 365 : 30) * 24 * 60 * 60 * 1000
+        );
+
+        // 1. Buscar suscripción existente directamente por mp_preapproval_id
+        let subscription: any = null;
+        const { data: subByPreapproval } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('mp_preapproval_id', preapprovalId)
           .maybeSingle();
 
-        if (applicationUser) {
-          // Buscar o crear suscripción
-          const { data: subscription } = await supabase
-            .from('subscriptions')
-            .select('*')
-            .eq('tenant_id', applicationUser.tenant_id)
-            .eq('plan_id', plan.id)
+        if (subByPreapproval) {
+          subscription = subByPreapproval;
+        } else {
+          // 2. Buscar por email del pagador en application_users
+          const { data: appUserByEmail } = await supabase
+            .from('application_users')
+            .select('tenant_id')
+            .eq('application_id', plan.application_id)
+            .or(`external_user_id.eq.${payerEmail},user_email.eq.${payerEmail}`)
             .maybeSingle();
 
-          if (subscription) {
-            // Actualizar suscripción con el ID de MercadoPago
-            await supabase
+          if (appUserByEmail) {
+            const { data: subByTenant } = await supabase
               .from('subscriptions')
-              .update({
-                provider_subscription_id: preapprovalId,
-                status: 'active',
-                metadata: {
-                  ...subscription.metadata,
-                  mp_preapproval_id: preapprovalId,
-                  webhook_event: eventType,
-                },
-              })
-              .eq('id', subscription.id);
-
-            await updateOrCreateLicense(supabase, subscription.id);
-
-            console.log('✅ Subscription updated with preapproval_id:', preapprovalId);
+              .select('*')
+              .eq('tenant_id', appUserByEmail.tenant_id)
+              .in('status', ['trialing', 'active', 'pending'])
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            subscription = subByTenant;
           }
+        }
+
+        if (subscription) {
+          await supabase
+            .from('subscriptions')
+            .update({
+              plan_id: plan.id,
+              provider_subscription_id: preapprovalId,
+              mp_preapproval_id: preapprovalId,
+              payment_provider: 'mercadopago',
+              status: 'active',
+              period_start: now.toISOString(),
+              period_end: periodEnd.toISOString(),
+              metadata: {
+                ...subscription.metadata,
+                mp_preapproval_id: preapprovalId,
+                webhook_event: eventType,
+                activated_at: now.toISOString(),
+              },
+            })
+            .eq('id', subscription.id);
+
+          await updateOrCreateLicense(supabase, subscription.id);
+          console.log('✅ Subscription updated:', subscription.id, '→ plan:', plan.id);
+        } else {
+          console.log('⚠️ No subscription found for preapproval:', preapprovalId, 'email:', payerEmail);
         }
       }
     }
