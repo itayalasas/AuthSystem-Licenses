@@ -26,6 +26,16 @@ function redirect(location: string): Response {
   });
 }
 
+async function getBackUrl(supabase: any, appId: string | null): Promise<string | null> {
+  if (!appId) return null;
+  const { data } = await supabase
+    .from("applications")
+    .select("back_url")
+    .eq("id", appId)
+    .maybeSingle();
+  return data?.back_url || null;
+}
+
 async function updateOrCreateLicense(supabase: any, subscriptionId: string) {
   const { data: subscription } = await supabase
     .from('subscriptions')
@@ -98,59 +108,81 @@ Deno.serve(async (req: Request) => {
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseKey);
 
+  // Helper: resolve application_id from all available sources and return back_url
+  async function resolveBackUrl(planAppId: string | null): Promise<string | null> {
+    // Priority: plan.application_id > app_id param
+    const id = planAppId || appId;
+    return getBackUrl(supabase, id);
+  }
+
   try {
     const config = await getConfigFromAPI();
     const token = config.MERCADOPAGO_ACCESS_TOKEN;
 
     let subscription: any = null;
     let plan: any = null;
-    let application: any = null;
     let mpStatus = "pending";
     let mpPlanId: string | null = null;
 
-    // Step 1 — query MP directly to get authoritative status
-    if (preapprovalId && token && token !== "your_mercadopago_access_token_here") {
-      try {
-        const mpRes = await fetch(`https://api.mercadopago.com/preapproval/${preapprovalId}`, {
-          headers: { "Authorization": `Bearer ${token}` },
-        });
-        if (mpRes.ok) {
-          const mpData = await mpRes.json();
-          mpStatus = mpData.status || "pending";
-          mpPlanId = mpData.preapproval_plan_id || null;
-
-          if (mpPlanId) {
-            const { data: planData } = await supabase
-              .from("plans")
-              .select("id, name, application_id, entitlements, billing_cycle")
-              .eq("mp_preapproval_plan_id", mpPlanId)
-              .maybeSingle();
-            plan = planData;
-          }
-        }
-      } catch (e) {
-        console.error("MP API error:", e);
-      }
-    }
-
-    // Step 2 — check our DB for existing subscription by preapproval_id
+    // Step 1 — buscar suscripcion en DB por preapproval_id (camino rapido, sin llamar a MP)
     if (preapprovalId) {
       const { data: sub } = await supabase
         .from("subscriptions")
-        .select("id, status, plan_id, tenant_id, plans(id, name, application_id)")
+        .select("id, status, plan_id, tenant_id, mp_preapproval_id, plans(id, name, application_id, billing_cycle, entitlements)")
         .eq("mp_preapproval_id", preapprovalId)
         .maybeSingle();
 
       if (sub) {
         subscription = sub;
-        if (!plan) plan = sub.plans;
-        if (!mpStatus || mpStatus === "pending") mpStatus = sub.status || "pending";
+        plan = sub.plans;
+        mpStatus = sub.status || "pending";
       }
     }
 
-    // Step 3 — if MP says authorized, update/create subscription and license
+    // Step 2 — si no encontramos por preapproval_id, buscar el plan desde DB via app_id
+    // y luego consultar MP para el status real
+    if (!plan && appId) {
+      // Buscar el plan de MP que corresponde a esta app consultando MP con el preapproval_id
+      if (preapprovalId && token && token !== "your_mercadopago_access_token_here") {
+        try {
+          const mpRes = await fetch(`https://api.mercadopago.com/preapproval/${preapprovalId}`, {
+            headers: { "Authorization": `Bearer ${token}` },
+          });
+          if (mpRes.ok) {
+            const mpData = await mpRes.json();
+            mpStatus = mpData.status || "pending";
+            mpPlanId = mpData.preapproval_plan_id || null;
+
+            if (mpPlanId) {
+              const { data: planData } = await supabase
+                .from("plans")
+                .select("id, name, application_id, entitlements, billing_cycle")
+                .eq("mp_preapproval_plan_id", mpPlanId)
+                .maybeSingle();
+              plan = planData;
+            }
+          }
+        } catch (e) {
+          console.error("MP API error:", e);
+        }
+      }
+
+      // Si MP no respondio o no hay token, buscar cualquier plan activo de esta app
+      // para poder obtener el application_id y de ahi el back_url
+      if (!plan) {
+        const { data: anyPlan } = await supabase
+          .from("plans")
+          .select("id, name, application_id, billing_cycle, entitlements")
+          .eq("application_id", appId)
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle();
+        plan = anyPlan;
+      }
+    }
+
+    // Step 3 — si MP dice authorized, actualizar suscripcion y licencia
     if (mpStatus === "authorized" && plan) {
-      const resolvedAppId = plan.application_id;
       const now = new Date();
       const billingCycle = plan.billing_cycle || "monthly";
       const periodEnd = new Date(
@@ -158,7 +190,6 @@ Deno.serve(async (req: Request) => {
       );
 
       if (subscription) {
-        // Update existing subscription: new plan + active status + store preapproval_id
         await supabase
           .from("subscriptions")
           .update({
@@ -167,103 +198,72 @@ Deno.serve(async (req: Request) => {
             period_start: now.toISOString(),
             period_end: periodEnd.toISOString(),
             mp_preapproval_id: preapprovalId,
+            payment_provider: "mercadopago",
             metadata: {
               ...((subscription as any).metadata || {}),
               mp_preapproval_id: preapprovalId,
-              upgraded_at: now.toISOString(),
+              activated_at: now.toISOString(),
             },
           })
           .eq("id", subscription.id);
 
         await updateOrCreateLicense(supabase, subscription.id);
-        console.log("Updated subscription:", subscription.id, "to plan:", plan.id);
+        console.log("Updated subscription:", subscription.id, "plan:", plan.id);
       } else {
-        // No subscription found by preapproval_id — try to find by app_id and update
-        // This handles the case where the subscription was created without preapproval_id yet
-        if (appId) {
-          const { data: appData } = await supabase
-            .from("applications")
-            .select("id")
-            .eq("id", appId)
-            .maybeSingle();
+        // Buscar suscripcion activa/trial para este tenant via app
+        const resolvedAppId = plan.application_id || appId;
+        const { data: subToUpdate } = await supabase
+          .from("subscriptions")
+          .select("id, tenant_id")
+          .eq("plan_id", plan.id)
+          .is("mp_preapproval_id", null)
+          .in("status", ["trialing", "active", "pending"])
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-          if (appData) {
-            // Find any active/trialing subscription for this application's tenants
-            // that matches the plan — update the one without preapproval_id
-            const { data: subToUpdate } = await supabase
-              .from("subscriptions")
-              .select("id, tenant_id")
-              .eq("plan_id", plan.id)
-              .is("mp_preapproval_id", null)
-              .in("status", ["trialing", "active", "pending"])
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .maybeSingle();
+        if (subToUpdate) {
+          await supabase
+            .from("subscriptions")
+            .update({
+              status: "active",
+              period_start: now.toISOString(),
+              period_end: periodEnd.toISOString(),
+              mp_preapproval_id: preapprovalId,
+              payment_provider: "mercadopago",
+            })
+            .eq("id", subToUpdate.id);
 
-            if (subToUpdate) {
-              await supabase
-                .from("subscriptions")
-                .update({
-                  status: "active",
-                  period_start: now.toISOString(),
-                  period_end: periodEnd.toISOString(),
-                  mp_preapproval_id: preapprovalId,
-                })
-                .eq("id", subToUpdate.id);
-
-              await updateOrCreateLicense(supabase, subToUpdate.id);
-              subscription = subToUpdate;
-              console.log("Linked preapproval to subscription:", subToUpdate.id);
-            }
-          }
+          await updateOrCreateLicense(supabase, subToUpdate.id);
+          subscription = subToUpdate;
+          console.log("Linked preapproval to subscription:", subToUpdate.id);
         }
       }
     }
 
-    // Step 4 — resolve application for back_url
-    const resolvedAppId = plan?.application_id || appId;
-    if (resolvedAppId) {
-      const { data: appData } = await supabase
-        .from("applications")
-        .select("id, back_url")
-        .eq("id", resolvedAppId)
-        .maybeSingle();
-      application = appData;
-    }
+    // Step 4 — obtener back_url de la aplicacion en la DB
+    const backUrl = await resolveBackUrl(plan?.application_id || null);
 
-    // Step 5 — Redirect to admin panel /payment-callback with all context
+    // Step 5 — armar URL final al panel con todos los params
     const adminCallbackUrl = new URL(`${ADMIN_PANEL_URL}/payment-callback`);
     adminCallbackUrl.searchParams.set("subscription_status", mpStatus);
     if (preapprovalId) adminCallbackUrl.searchParams.set("preapproval_id", preapprovalId);
     if (subscription?.id) adminCallbackUrl.searchParams.set("subscription_id", subscription.id);
     if (plan?.id) adminCallbackUrl.searchParams.set("plan_id", plan.id);
     if (plan?.name) adminCallbackUrl.searchParams.set("plan_name", plan.name);
+    if (backUrl) adminCallbackUrl.searchParams.set("back_url", backUrl);
 
-    // Only set back_url if the application has one configured — never fall back to admin panel URL
-    if (application?.back_url) {
-      adminCallbackUrl.searchParams.set("back_url", application.back_url);
-    }
-
+    console.log("Redirecting to:", adminCallbackUrl.toString());
     return redirect(adminCallbackUrl.toString());
 
   } catch (err: any) {
     console.error("subscription-callback error:", err);
 
-    // Try to get the app's back_url even on error so the user lands on the right site
+    // Incluso en error, intentar obtener back_url de la DB para no quedar atascado
     let errorBackUrl: string | null = null;
-    if (appId) {
-      try {
-        const supabaseUrl2 = Deno.env.get("SUPABASE_URL")!;
-        const supabaseKey2 = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-        const supabase2 = createClient(supabaseUrl2, supabaseKey2);
-        const { data: appData } = await supabase2
-          .from("applications")
-          .select("back_url")
-          .eq("id", appId)
-          .maybeSingle();
-        errorBackUrl = appData?.back_url || null;
-      } catch (_) {}
-    }
+    try {
+      errorBackUrl = await getBackUrl(supabase, appId);
+    } catch (_) {}
 
     const errUrl = new URL(`${ADMIN_PANEL_URL}/payment-callback`);
     errUrl.searchParams.set("subscription_status", "pending");
