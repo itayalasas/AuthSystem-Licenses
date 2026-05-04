@@ -101,8 +101,16 @@ Deno.serve(async (req: Request) => {
   }
 
   const url = new URL(req.url);
-  const preapprovalId = url.searchParams.get("preapproval_id");
-  const appId = url.searchParams.get("app_id");
+
+  // MP sometimes appends its params with a second "?" instead of "&", producing a malformed URL.
+  // e.g. "...callback?app_id=xxx?preapproval_id=yyy"
+  // Standard URLSearchParams only splits on the first "?", so we need to flatten any extra "?" into "&".
+  const rawSearch = req.url.includes('?') ? req.url.slice(req.url.indexOf('?') + 1) : '';
+  const normalizedSearch = rawSearch.replace(/\?/g, '&');
+  const allParams = new URLSearchParams(normalizedSearch);
+
+  const preapprovalId = allParams.get("preapproval_id");
+  const appId = allParams.get("app_id");
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
