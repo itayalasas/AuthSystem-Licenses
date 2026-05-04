@@ -1,8 +1,16 @@
 import { useState } from 'react';
-import { X, Copy, Check, Trash2 } from 'lucide-react';
+import { X, Copy, Check, Trash2, ArrowRightLeft } from 'lucide-react';
 import { type Application } from '../lib/admin-api';
 import { ConfirmModal } from './ConfirmModal';
 import { useToast } from '../hooks/useToast';
+
+function buildCallbackUrl(applicationId: string): string {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+  const base = `${supabaseUrl}/functions/v1/admin-api/subscription-callback`;
+  const u = new URL(base);
+  u.searchParams.set('app_id', applicationId);
+  return u.toString();
+}
 
 interface ApplicationModalProps {
   application?: Application;
@@ -22,6 +30,7 @@ export function ApplicationModal({ application, onClose, onSave, onDelete }: App
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [copiedApiKey, setCopiedApiKey] = useState(false);
+  const [copiedCallback, setCopiedCallback] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const { showToast } = useToast();
 
@@ -43,6 +52,12 @@ export function ApplicationModal({ application, onClose, onSave, onDelete }: App
     navigator.clipboard.writeText(text);
     setCopiedApiKey(true);
     setTimeout(() => setCopiedApiKey(false), 2000);
+  };
+
+  const copyCallbackUrl = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedCallback(true);
+    setTimeout(() => setCopiedCallback(false), 2000);
   };
 
   const handleDeleteClick = () => {
@@ -192,12 +207,48 @@ export function ApplicationModal({ application, onClose, onSave, onDelete }: App
               placeholder="https://mi-app.com/suscripcion/resultado"
             />
             <p className="text-xs text-gray-500 mt-1">
-              Tras el checkout de MercadoPago, el usuario será redirigido aquí con los parámetros{' '}
+              Tras el checkout de MercadoPago, el usuario llegará aquí con{' '}
               <code className="bg-gray-100 px-1 rounded">subscription_status</code>,{' '}
               <code className="bg-gray-100 px-1 rounded">subscription_id</code> y{' '}
               <code className="bg-gray-100 px-1 rounded">plan_id</code>
             </p>
           </div>
+
+          {application && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <ArrowRightLeft className="w-4 h-4 text-amber-700 flex-shrink-0" />
+                <span className="text-sm font-semibold text-amber-900">URL de callback para MercadoPago</span>
+              </div>
+              <p className="text-xs text-amber-800 leading-relaxed">
+                Esta es la URL que debes configurar como <strong>back_url</strong> al crear el plan en MercadoPago
+                (o pasarla al front del tenant para que la use al redirigir al checkout).
+                Esta plataforma intercepta el retorno, resuelve el estado de la suscripción y redirige
+                al usuario a la "URL de retorno tras pago" de arriba.
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={buildCallbackUrl(application.id)}
+                  readOnly
+                  className="flex-1 px-3 py-2 bg-white border border-amber-300 rounded-lg font-mono text-xs text-gray-700 select-all"
+                  onClick={e => (e.target as HTMLInputElement).select()}
+                />
+                <button
+                  type="button"
+                  onClick={() => copyCallbackUrl(buildCallbackUrl(application.id))}
+                  className="px-3 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors flex items-center gap-1.5 text-sm font-medium flex-shrink-0"
+                >
+                  {copiedCallback ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copiedCallback ? 'Copiado' : 'Copiar'}
+                </button>
+              </div>
+              <p className="text-xs text-amber-700">
+                Parametros que MP devuelve al redirigir:{' '}
+                <code className="bg-amber-100 px-1 rounded">?preapproval_id=xxx&amp;app_id={application.id}</code>
+              </p>
+            </div>
+          )}
 
           <div className="flex gap-3 pt-4">
             <button
