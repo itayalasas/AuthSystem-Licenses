@@ -363,6 +363,7 @@ Deno.serve(async (req: Request) => {
               console.log(`Claimed existing tenant ${extTenant.name} (id: ${sharedTenantId})`);
             } else {
               console.log(`Creating new shared tenant: ${extTenant.name} (auth_tenant_id: ${extTenant.id})`);
+              const ownerEmail = extTenant.members?.[0]?.email || `tenant-${extTenant.id}@auto-sync.internal`;
               const { data: newShared, error: sharedErr } = await supabase
                 .from("tenants")
                 .insert({
@@ -371,6 +372,7 @@ Deno.serve(async (req: Request) => {
                   domain: extTenant.domain,
                   auth_tenant_id: extTenant.id,
                   status: extTenant.status,
+                  owner_email: ownerEmail,
                   metadata: {
                     auto_created: true,
                     shared_tenant: true,
