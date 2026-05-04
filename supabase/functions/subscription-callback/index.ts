@@ -242,7 +242,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // Step 4 — obtener back_url de la aplicacion en la DB
-    const backUrl = await resolveBackUrl(plan?.application_id || null);
+    // Usar plan.application_id si disponible, sino usar appId directamente de los params de la URL
+    const backUrl = await resolveBackUrl(plan?.application_id ?? appId);
 
     // Step 5 — armar URL final al panel con todos los params
     const adminCallbackUrl = new URL(`${ADMIN_PANEL_URL}/payment-callback`);
