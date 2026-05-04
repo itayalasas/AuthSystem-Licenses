@@ -41,6 +41,8 @@ const STATUS_CONFIG: Record<PaymentStatus, {
   },
 };
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+
 export function PaymentCallback() {
   const hasProcessed = useRef(false);
   const [status, setStatus] = useState<PaymentStatus>('unknown');
@@ -60,13 +62,11 @@ export function PaymentCallback() {
     const appBackUrl = params.get('back_url');
     if (appBackUrl) {
       try {
-        // Decode in case it was double-encoded
         const decoded = decodeURIComponent(appBackUrl);
         const url = new URL(decoded);
         params.forEach((v, k) => { if (k !== 'back_url') url.searchParams.set(k, v); });
         setRedirectUrl(url.toString());
       } catch {
-        // If URL is invalid, use as-is and append params manually
         const sep = appBackUrl.includes('?') ? '&' : '?';
         const extra = Array.from(params.entries())
           .filter(([k]) => k !== 'back_url')
@@ -74,6 +74,21 @@ export function PaymentCallback() {
           .join('&');
         setRedirectUrl(extra ? `${appBackUrl}${sep}${extra}` : appBackUrl);
       }
+      return;
+    }
+
+    // No back_url — MP may have redirected here directly bypassing the edge function.
+    // If we have a preapproval_id, bounce through the edge function to resolve back_url.
+    const preapprovalId = params.get('preapproval_id');
+    if (preapprovalId && SUPABASE_URL) {
+      const edgeFnUrl = new URL(`${SUPABASE_URL}/functions/v1/subscription-callback`);
+      edgeFnUrl.searchParams.set('preapproval_id', preapprovalId);
+      // Also forward any other params MP sent
+      params.forEach((v, k) => {
+        if (k !== 'preapproval_id') edgeFnUrl.searchParams.set(k, v);
+      });
+      window.location.replace(edgeFnUrl.toString());
+      return;
     }
   }, []);
 
