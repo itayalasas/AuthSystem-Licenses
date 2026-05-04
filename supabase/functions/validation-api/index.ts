@@ -105,31 +105,85 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      // Find tenant by user
-      let query = supabase
-        .from('tenants')
-        .select(`
-          *,
-          tenant_applications!inner(
-            *,
-            subscription:subscriptions(
-              *,
-              plan:plans(*)
-            )
-          )
-        `)
-        .eq('tenant_applications.application_id', application.id)
-        .eq('tenant_applications.status', 'active');
+      // Strategy depends on auth_type:
+      // - basic / hybrid: find tenant by owner_user_id (personal tenant per user)
+      // - tenant / hybrid: also look for shared tenants via tenant_members table
+      //
+      // We always try personal tenant first, then shared tenant.
+      // This handles the hybrid migration scenario correctly.
 
-      if (external_user_id) {
-        query = query.eq('owner_user_id', external_user_id);
-      } else if (user_email) {
-        query = query.eq('owner_email', user_email);
+      let tenant: any = null;
+
+      // 1. Look up personal tenant (basic auth path — one tenant per user)
+      {
+        let query = supabase
+          .from('tenants')
+          .select(`
+            *,
+            tenant_applications!inner(
+              *,
+              subscription:subscriptions(*, plan:plans(*))
+            )
+          `)
+          .eq('tenant_applications.application_id', application.id)
+          .eq('tenant_applications.status', 'active')
+          .is('auth_tenant_id', null);
+
+        if (external_user_id) {
+          query = query.eq('owner_user_id', external_user_id);
+        } else {
+          query = query.eq('owner_email', user_email);
+        }
+
+        const { data: personalTenants } = await query;
+        if (personalTenants && personalTenants.length > 0) {
+          tenant = personalTenants[0];
+        }
       }
 
-      const { data: tenants } = await query;
+      // 2. For tenant/hybrid apps, also check if this user belongs to a shared tenant
+      //    (via tenant_members). If found and their shared tenant has a better/active sub,
+      //    prefer it over the personal tenant.
+      if (application.auth_type === 'tenant' || application.auth_type === 'hybrid') {
+        const memberLookup = external_user_id
+          ? supabase.from('tenant_members').select('tenant_id').eq('external_user_id', external_user_id).eq('application_id', application.id)
+          : supabase.from('tenant_members').select('tenant_id').eq('email', user_email).eq('application_id', application.id);
 
-      if (!tenants || tenants.length === 0) {
+        const { data: memberships } = await memberLookup;
+
+        if (memberships && memberships.length > 0) {
+          const sharedTenantIds = memberships.map((m: any) => m.tenant_id);
+
+          const { data: sharedTenants } = await supabase
+            .from('tenants')
+            .select(`
+              *,
+              tenant_applications!inner(
+                *,
+                subscription:subscriptions(*, plan:plans(*))
+              )
+            `)
+            .in('id', sharedTenantIds)
+            .eq('tenant_applications.application_id', application.id)
+            .eq('tenant_applications.status', 'active')
+            .not('auth_tenant_id', 'is', null);
+
+          if (sharedTenants && sharedTenants.length > 0) {
+            // Prefer shared tenant that has an active (non-trial) subscription
+            const activeSub = sharedTenants.find((t: any) => {
+              const sub = t.tenant_applications?.[0]?.subscription;
+              return sub && (sub.status === 'active' || sub.status === 'trialing');
+            });
+            if (activeSub) {
+              tenant = activeSub;
+            } else if (!tenant) {
+              tenant = sharedTenants[0];
+            }
+          }
+        }
+      }
+
+      if (!tenant) {
         return new Response(
           JSON.stringify({
             success: true,
@@ -139,8 +193,6 @@ Deno.serve(async (req: Request) => {
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-
-      const tenant = tenants[0];
       const tenantApp = tenant.tenant_applications[0];
       const subscription = tenantApp.subscription;
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Trash2, Edit2 } from 'lucide-react';
+import { X, Trash2, CreditCard as Edit2 } from 'lucide-react';
 import type { Plan, Application } from '../lib/admin-api';
 import { FeatureModal } from './FeatureModal';
 import { useToast } from '../hooks/useToast';
@@ -33,7 +33,12 @@ export function PlanModal({ plan, applications, onClose, onCreate, onUpdate, adm
     trial_days: plan?.trial_days || 14,
     billing_day: plan?.billing_day || '',
     external_reference: plan?.external_reference || '',
+    user_limit: plan?.user_limit ?? '',
   });
+
+  // Determine if selected app uses tenant-based auth
+  const selectedApp = applications.find(a => a.id === formData.application_id);
+  const isTenantApp = selectedApp?.auth_type === 'tenant' || selectedApp?.auth_type === 'hybrid';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +47,7 @@ export function PlanModal({ plan, applications, onClose, onCreate, onUpdate, adm
     try {
       const data = {
         ...formData,
+        user_limit: formData.user_limit !== '' ? Number(formData.user_limit) : null,
         entitlements: {
           features,
         },
@@ -185,6 +191,28 @@ export function PlanModal({ plan, applications, onClose, onCreate, onUpdate, adm
                 <p className="text-xs text-gray-500 mt-1">Día del mes para cobrar la suscripción</p>
               </div>
             </div>
+
+            {isTenantApp && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Límite de usuarios por tenant
+                  <span className="ml-2 text-xs font-normal text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                    {selectedApp?.auth_type === 'hybrid' ? 'Híbrido' : 'Tenant'}
+                  </span>
+                </label>
+                <input
+                  type="number"
+                  value={formData.user_limit}
+                  onChange={(e) => setFormData({ ...formData, user_limit: e.target.value })}
+                  min="1"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Sin límite"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Máximo de usuarios por tenant bajo este plan. Vacío = sin límite.
+                </p>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">

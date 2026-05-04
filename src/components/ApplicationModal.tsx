@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Copy, Check, Trash2, ArrowRightLeft } from 'lucide-react';
+import { X, Copy, Check, Trash2, ArrowRightLeft, UserCheck, Building2, Layers } from 'lucide-react';
 import { type Application } from '../lib/admin-api';
 import { ConfirmModal } from './ConfirmModal';
 import { useToast } from '../hooks/useToast';
@@ -32,7 +32,14 @@ export function ApplicationModal({ application, onClose, onCreate, onUpdate, onD
     external_app_id: application?.external_app_id || '',
     webhook_url: application?.webhook_url || '',
     back_url: (application as any)?.back_url || '',
+    auth_type: application?.auth_type || 'basic',
   });
+
+  const authTypeOptions = [
+    { value: 'basic', label: 'Básico', desc: 'Un usuario = una suscripción independiente', icon: <UserCheck size={16} /> },
+    { value: 'tenant', label: 'Tenant', desc: 'Grupos de usuarios comparten una suscripción', icon: <Building2 size={16} /> },
+    { value: 'hybrid', label: 'Híbrido', desc: 'Ambos modos activos (migración)', icon: <Layers size={16} /> },
+  ];
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [copiedApiKey, setCopiedApiKey] = useState(false);
@@ -44,10 +51,13 @@ export function ApplicationModal({ application, onClose, onCreate, onUpdate, onD
     e.preventDefault();
     try {
       setSaving(true);
+      const payload = application
+        ? { webhook_url: formData.webhook_url, back_url: formData.back_url }
+        : formData;
       if (application) {
-        await onUpdate?.(formData);
+        await onUpdate?.(payload);
       } else {
-        await onCreate?.(formData);
+        await onCreate?.(payload);
       }
     } catch (error) {
       console.error('Failed to save application:', error);
@@ -172,6 +182,35 @@ export function ApplicationModal({ application, onClose, onCreate, onUpdate, onD
               placeholder="mi-sistema-crm"
             />
             <p className="text-xs text-gray-500 mt-1">Identificador único en minúsculas (ej: mi-app)</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tipo de Autenticación
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {authTypeOptions.map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => !application && setFormData({ ...formData, auth_type: opt.value })}
+                  className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 text-center transition-all ${
+                    formData.auth_type === opt.value
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  } ${application ? 'cursor-default opacity-80' : 'cursor-pointer'}`}
+                >
+                  <span className={formData.auth_type === opt.value ? 'text-blue-600' : 'text-gray-400'}>
+                    {opt.icon}
+                  </span>
+                  <span className="text-xs font-semibold">{opt.label}</span>
+                  <span className="text-xs leading-tight text-gray-500">{opt.desc}</span>
+                </button>
+              ))}
+            </div>
+            {application && (
+              <p className="text-xs text-gray-400 mt-1">El tipo de auth se actualiza automáticamente desde el sync con AuthSystem.</p>
+            )}
           </div>
 
           <div>

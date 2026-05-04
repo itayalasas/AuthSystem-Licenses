@@ -60,6 +60,7 @@ interface Application {
   is_active: boolean;
   plan_id?: string;
   max_users?: number;
+  auth_type: 'basic' | 'tenant' | 'hybrid';
   created_at: string;
   updated_at: string;
   users_count?: number;
@@ -107,6 +108,7 @@ interface Plan {
   billing_day?: number;
   external_reference?: string;
   entitlements: any;
+  user_limit?: number | null;
   mp_preapproval_plan_id?: string;
   mp_status?: string;
   mp_init_point?: string;

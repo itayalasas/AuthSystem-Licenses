@@ -7,8 +7,29 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
+interface ExternalMember {
+  id: string;
+  email: string;
+  name: string;
+  status: string;
+  last_login: string | null;
+  created_at: string;
+}
+
+interface ExternalTenant {
+  id: string;
+  name: string;
+  slug: string;
+  domain: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  members: ExternalMember[];
+}
+
 interface ExternalUser {
   id: string;
+  tenant_id: string | null;
   email: string;
   name: string;
   status: string;
@@ -23,12 +44,14 @@ interface ExternalApplication {
   status: string;
   url: string;
   users_count: number;
+  auth_type: string;
   environment_urls: {
     development: string | null;
     testing: string | null;
     production: string | null;
   };
   users: ExternalUser[];
+  tenants?: ExternalTenant[];
   created_at: string;
   updated_at: string;
 }
@@ -43,10 +66,7 @@ interface ExternalAPIResponse {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
@@ -59,19 +79,9 @@ Deno.serve(async (req: Request) => {
     const validBearerAuth = authHeader?.startsWith("Bearer ");
 
     if (!validCronAuth && !validBearerAuth) {
-      console.warn("Unauthorized sync attempt");
       return new Response(
-        JSON.stringify({
-          success: false,
-          error: "Unauthorized - provide valid authentication",
-        }),
-        {
-          status: 401,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        }
+        JSON.stringify({ success: false, error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -79,329 +89,303 @@ Deno.serve(async (req: Request) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log("Starting application sync from external auth system...");
-
     const externalApiUrl = "https://auth-systemv1.netlify.app/api/application/info";
     const externalApiKey = Deno.env.get("EXTERNAL_AUTH_API_KEY");
 
     if (!externalApiKey) {
-      console.error("EXTERNAL_AUTH_API_KEY not configured in environment variables");
       throw new Error("EXTERNAL_AUTH_API_KEY environment variable is required but not set");
     }
 
-    console.log("External API Key found, length:", externalApiKey.length);
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      "X-API-Key": externalApiKey,
-    };
-
     const response = await fetch(externalApiUrl, {
       method: "GET",
-      headers,
+      headers: { "Content-Type": "application/json", "X-API-Key": externalApiKey },
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`External API error (${response.status}):`, errorText);
-      throw new Error(`External API returned status ${response.status}. Response: ${errorText}`);
+      throw new Error(`External API returned status ${response.status}: ${errorText}`);
     }
 
     const externalData: ExternalAPIResponse = await response.json();
 
-    if (!externalData.success || !externalData.data || !externalData.data.applications) {
+    if (!externalData.success || !externalData.data?.applications) {
       throw new Error("Invalid response format from external API");
     }
 
     const externalApps = externalData.data.applications;
-    console.log(`Fetched ${externalApps.length} applications from external system`);
+    console.log(`Fetched ${externalApps.length} applications`);
 
-    const { data: existingApps, error: fetchError } = await supabase
+    const { data: existingApps } = await supabase
       .from("applications")
-      .select("external_app_id, id, name");
+      .select("external_app_id, id, name, auth_type");
 
-    if (fetchError) {
-      throw new Error(`Failed to fetch existing applications: ${fetchError.message}`);
-    }
-
-    const existingExternalIds = new Set(
-      existingApps?.map((app) => app.external_app_id) || []
+    const appByExternalId = new Map(
+      (existingApps || []).map((a) => [a.external_app_id, a])
     );
 
     const results = {
       total_external: externalApps.length,
-      already_exists: 0,
-      newly_created: 0,
-      failed: 0,
-      total_users_synced: 0,
-      total_tenants_created: 0,
-      total_relationships_created: 0,
-      created_apps: [] as any[],
+      apps_created: 0,
+      apps_updated: 0,
+      apps_failed: 0,
+      users_synced: 0,
+      tenants_created: 0,
+      tenants_updated: 0,
+      tenant_members_synced: 0,
       errors: [] as string[],
     };
 
     for (const extApp of externalApps) {
-      if (existingExternalIds.has(extApp.application_id)) {
-        results.already_exists++;
-        console.log(`Application ${extApp.name} (${extApp.application_id}) already exists, skipping...`);
-        continue;
-      }
+      const authType = extApp.auth_type || "basic";
+      const existingApp = appByExternalId.get(extApp.application_id);
 
-      const slug = extApp.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "");
+      let internalAppId: string;
 
-      const newApp = {
-        name: extApp.name,
-        slug: slug,
-        external_app_id: extApp.application_id,
-        webhook_url: extApp.url,
-        settings: {
-          external_id: extApp.id,
-          status: extApp.status,
-          environment_urls: extApp.environment_urls,
-          synced_at: new Date().toISOString(),
-        },
-        is_active: extApp.status === "active",
-      };
-
-      const { data: createdApp, error: insertError } = await supabase
-        .from("applications")
-        .insert(newApp)
-        .select()
-        .single();
-
-      if (insertError) {
-        results.failed++;
-        results.errors.push(
-          `Failed to create ${extApp.name}: ${insertError.message}`
-        );
-        console.error(`Error creating ${extApp.name}:`, insertError);
-        continue;
-      }
-
-      results.newly_created++;
-      results.created_apps.push({
-        name: createdApp.name,
-        slug: createdApp.slug,
-        external_app_id: createdApp.external_app_id,
-        api_key: createdApp.api_key,
-      });
-
-      console.log(`Created application: ${createdApp.name} (${createdApp.external_app_id})`);
-    }
-
-    console.log("Starting user synchronization...");
-
-    for (const extApp of externalApps) {
-      if (!extApp.users || extApp.users.length === 0) {
-        console.log(`No users to sync for ${extApp.name}`);
-        continue;
-      }
-
-      const internalApp = existingApps?.find(
-        app => app.external_app_id === extApp.application_id
-      ) || results.created_apps.find(
-        app => app.external_app_id === extApp.application_id
-      );
-
-      if (!internalApp) {
-        console.error(`Could not find internal app for ${extApp.application_id}`);
-        continue;
-      }
-
-      const appId = internalApp.id;
-
-      console.log(`Processing ${extApp.users.length} users for ${extApp.name}`);
-
-      const successfullySyncedUsers = [];
-
-      for (const user of extApp.users) {
-        if (!user.email || user.email.trim() === '') {
-          console.error(`Skipping user ${user.id} for ${extApp.name}: missing email`);
-          results.errors.push(
-            `Failed to sync user ${user.name || user.id} in ${extApp.name}: missing email address`
-          );
-          continue;
-        }
-
-        const userData = {
-          application_id: appId,
-          external_user_id: user.id,
-          email: user.email,
-          name: user.name,
-          status: user.status,
-          last_login: user.last_login,
-          metadata: {
-            synced_at: new Date().toISOString(),
-          },
-        };
-
-        const { error: upsertError } = await supabase
-          .from("application_users")
-          .upsert(userData, {
-            onConflict: "application_id, external_user_id",
-          });
-
-        if (upsertError) {
-          console.error(`Failed to sync user ${user.email} for ${extApp.name}:`, upsertError);
-          results.errors.push(
-            `Failed to sync user ${user.email}: ${upsertError.message}`
-          );
-          continue;
-        }
-
-        results.total_users_synced++;
-        successfullySyncedUsers.push(user);
-      }
-
-      console.log(`Successfully synced ${successfullySyncedUsers.length} users for ${extApp.name}`);
-
-      for (const user of successfullySyncedUsers) {
-        // Debug: log user data
-        console.log(`Processing tenant for user:`, JSON.stringify({
-          id: user.id,
-          email: user.email,
-          name: user.name,
-        }));
-
-        // Validate user has email before processing
-        if (!user.email || user.email.trim() === '') {
-          console.error(`Skipping tenant creation for user ${user.id}: missing email`);
-          results.errors.push(
-            `Failed to create tenant for user ${user.name || user.id}: missing email address`
-          );
-          continue;
-        }
-
-        const { data: existingUserTenant } = await supabase
-          .from("tenants")
-          .select("id")
-          .eq("owner_user_id", user.id)
-          .maybeSingle();
-
-        let userTenantId = existingUserTenant?.id;
-
-        if (!existingUserTenant) {
-          const tenantName = user.name && user.name.trim() !== '' ? user.name : user.email;
-
-          const { data: newUserTenant, error: userTenantError } = await supabase
-            .from("tenants")
-            .insert({
-              name: tenantName,
-              organization_name: `${tenantName} Org`,
-              owner_user_id: user.id,
-              owner_email: user.email,
-              billing_email: user.email,
-              metadata: {
-                auto_created: true,
-                created_from_sync: true,
-                application_id: extApp.application_id,
+      if (existingApp) {
+        // Update auth_type if it changed
+        if (existingApp.auth_type !== authType) {
+          await supabase
+            .from("applications")
+            .update({
+              auth_type: authType,
+              is_active: extApp.status === "active",
+              settings: {
+                external_id: extApp.id,
+                status: extApp.status,
+                environment_urls: extApp.environment_urls,
                 synced_at: new Date().toISOString(),
               },
             })
-            .select()
-            .single();
+            .eq("id", existingApp.id);
+          results.apps_updated++;
+        }
+        internalAppId = existingApp.id;
+      } else {
+        const slug = extApp.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
 
-          if (userTenantError) {
-            console.error(`Failed to create tenant for user ${user.email}:`, userTenantError);
-            results.errors.push(
-              `Failed to sync user ${user.email}: ${userTenantError.message}`
-            );
-            continue;
-          }
+        const { data: createdApp, error: insertError } = await supabase
+          .from("applications")
+          .insert({
+            name: extApp.name,
+            slug,
+            external_app_id: extApp.application_id,
+            webhook_url: extApp.url,
+            auth_type: authType,
+            is_active: extApp.status === "active",
+            settings: {
+              external_id: extApp.id,
+              status: extApp.status,
+              environment_urls: extApp.environment_urls,
+              synced_at: new Date().toISOString(),
+            },
+          })
+          .select()
+          .single();
 
-          userTenantId = newUserTenant.id;
-          results.total_tenants_created++;
-          console.log(`Created tenant for user: ${user.email}`);
+        if (insertError || !createdApp) {
+          results.apps_failed++;
+          results.errors.push(`Failed to create ${extApp.name}: ${insertError?.message}`);
+          continue;
         }
 
-        const { data: existingUserRelation } = await supabase
-          .from("tenant_applications")
-          .select("id")
-          .eq("tenant_id", userTenantId)
-          .eq("application_id", appId)
-          .maybeSingle();
+        internalAppId = createdApp.id;
+        results.apps_created++;
+        console.log(`Created app: ${extApp.name}`);
+      }
 
-        if (!existingUserRelation) {
-          const { error: userRelationError } = await supabase
+      // ── Sync users ──────────────────────────────────────────────────────────
+      if (extApp.users?.length) {
+        for (const user of extApp.users) {
+          if (!user.email?.trim()) continue;
+
+          await supabase.from("application_users").upsert(
+            {
+              application_id: internalAppId,
+              external_user_id: user.id,
+              email: user.email,
+              name: user.name,
+              status: user.status,
+              last_login: user.last_login,
+              metadata: { synced_at: new Date().toISOString() },
+            },
+            { onConflict: "application_id, external_user_id" }
+          );
+
+          results.users_synced++;
+
+          // Every user always gets their own personal tenant (basic auth path).
+          // For tenant-type apps, users with a tenant_id also belong to a shared tenant (below).
+          const { data: personalTenant } = await supabase
+            .from("tenants")
+            .select("id")
+            .eq("owner_user_id", user.id)
+            .maybeSingle();
+
+          let personalTenantId = personalTenant?.id;
+
+          if (!personalTenantId) {
+            const tenantName = user.name?.trim() || user.email;
+            const { data: newTenant, error: tenantErr } = await supabase
+              .from("tenants")
+              .insert({
+                name: tenantName,
+                organization_name: `${tenantName} Org`,
+                owner_user_id: user.id,
+                owner_email: user.email,
+                billing_email: user.email,
+                metadata: {
+                  auto_created: true,
+                  created_from_sync: true,
+                  application_id: extApp.application_id,
+                  synced_at: new Date().toISOString(),
+                },
+              })
+              .select("id")
+              .single();
+
+            if (tenantErr || !newTenant) {
+              results.errors.push(`Failed to create personal tenant for ${user.email}: ${tenantErr?.message}`);
+              continue;
+            }
+
+            personalTenantId = newTenant.id;
+            results.tenants_created++;
+          }
+
+          // Link personal tenant → application
+          const { data: existingRel } = await supabase
             .from("tenant_applications")
-            .insert({
-              tenant_id: userTenantId,
-              application_id: appId,
+            .select("id")
+            .eq("tenant_id", personalTenantId)
+            .eq("application_id", internalAppId)
+            .maybeSingle();
+
+          if (!existingRel) {
+            await supabase.from("tenant_applications").insert({
+              tenant_id: personalTenantId,
+              application_id: internalAppId,
               status: "active",
               granted_by: "auto_sync",
-              notes: `Auto-synced from ${extApp.name} for user ${user.email}`,
+              notes: `Auto-synced from ${extApp.name}`,
             });
+          }
+        }
+      }
 
-          if (userRelationError) {
-            console.error(`Failed to link user tenant to application:`, userRelationError);
-            results.errors.push(
-              `Failed to link tenant for ${user.email}: ${userRelationError.message}`
-            );
+      // ── Sync shared tenants (only for tenant/hybrid apps) ──────────────────
+      if ((authType === "tenant" || authType === "hybrid") && extApp.tenants?.length) {
+        for (const extTenant of extApp.tenants) {
+          // Find or create the shared tenant by auth_tenant_id
+          const { data: existingShared } = await supabase
+            .from("tenants")
+            .select("id")
+            .eq("auth_tenant_id", extTenant.id)
+            .maybeSingle();
+
+          let sharedTenantId = existingShared?.id;
+
+          if (!sharedTenantId) {
+            const { data: newShared, error: sharedErr } = await supabase
+              .from("tenants")
+              .insert({
+                name: extTenant.name,
+                slug: extTenant.slug,
+                domain: extTenant.domain,
+                auth_tenant_id: extTenant.id,
+                status: extTenant.status,
+                metadata: {
+                  auto_created: true,
+                  shared_tenant: true,
+                  synced_at: new Date().toISOString(),
+                },
+              })
+              .select("id")
+              .single();
+
+            if (sharedErr || !newShared) {
+              results.errors.push(`Failed to create shared tenant ${extTenant.name}: ${sharedErr?.message}`);
+              continue;
+            }
+
+            sharedTenantId = newShared.id;
+            results.tenants_created++;
+            console.log(`Created shared tenant: ${extTenant.name}`);
           } else {
-            results.total_relationships_created++;
-            console.log(`Linked tenant to application for user ${user.email}`);
+            // Update name/domain in case they changed
+            await supabase.from("tenants").update({
+              name: extTenant.name,
+              slug: extTenant.slug,
+              domain: extTenant.domain,
+              status: extTenant.status,
+            }).eq("id", sharedTenantId);
+            results.tenants_updated++;
+          }
+
+          // Link shared tenant → application
+          const { data: existingSharedRel } = await supabase
+            .from("tenant_applications")
+            .select("id")
+            .eq("tenant_id", sharedTenantId)
+            .eq("application_id", internalAppId)
+            .maybeSingle();
+
+          if (!existingSharedRel) {
+            await supabase.from("tenant_applications").insert({
+              tenant_id: sharedTenantId,
+              application_id: internalAppId,
+              status: "active",
+              granted_by: "auto_sync",
+              notes: `Shared tenant from ${extApp.name}`,
+            });
+          }
+
+          // Sync members into tenant_members table
+          for (const member of extTenant.members || []) {
+            if (!member.email?.trim()) continue;
+
+            await supabase.from("tenant_members").upsert(
+              {
+                tenant_id: sharedTenantId,
+                application_id: internalAppId,
+                external_user_id: member.id,
+                email: member.email,
+                name: member.name,
+                status: member.status,
+                last_login: member.last_login,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "tenant_id, external_user_id" }
+            );
+
+            results.tenant_members_synced++;
           }
         }
       }
     }
 
-    const summaryMessage = `
-      Sync completed successfully!
-      - Total applications from external system: ${results.total_external}
-      - Already registered: ${results.already_exists}
-      - Newly created: ${results.newly_created}
-      - Failed: ${results.failed}
-      - Total users synced: ${results.total_users_synced}
-      - Tenants auto-created: ${results.total_tenants_created}
-      - Application relationships created: ${results.total_relationships_created}
-    `;
-
-    console.log(summaryMessage);
+    console.log("Sync completed:", results);
 
     return new Response(
       JSON.stringify({
         success: true,
         message: "Application sync completed",
-        summary: {
-          total_external: results.total_external,
-          already_exists: results.already_exists,
-          newly_created: results.newly_created,
-          failed: results.failed,
-          total_users_synced: results.total_users_synced,
-          total_tenants_created: results.total_tenants_created,
-          total_relationships_created: results.total_relationships_created,
-        },
-        created_applications: results.created_apps,
-        errors: results.errors,
+        summary: results,
         timestamp: new Date().toISOString(),
       }),
-      {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Sync error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-
     return new Response(
       JSON.stringify({
         success: false,
-        error: errorMessage,
+        error: error instanceof Error ? error.message : "Unknown error",
         timestamp: new Date().toISOString(),
       }),
-      {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-      }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

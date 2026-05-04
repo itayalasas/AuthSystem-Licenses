@@ -3,7 +3,7 @@ import { Application, Plan } from '../lib/admin-api';
 import { CompactCard } from './CompactCard';
 import { Button } from './Button';
 import { ConfirmModal } from './ConfirmModal';
-import { Plus, Users, Globe, CreditCard as Edit2, Trash2, Key, Eye, Package } from 'lucide-react';
+import { Plus, Users, Globe, CreditCard as Edit2, Trash2, Key, Eye, Package, UserCheck, Building2, Layers } from 'lucide-react';
 
 interface ApplicationsViewProps {
   applications: Application[];
@@ -19,6 +19,17 @@ export function ApplicationsView({ applications, plans, onAdd, onEdit, onDelete,
   const [appToDelete, setAppToDelete] = useState<Application | null>(null);
 
   const getAppPlans = (appId: string) => plans.filter(plan => plan.application_id === appId);
+
+  const authTypeBadge = (authType: string) => {
+    switch (authType) {
+      case 'tenant':
+        return { icon: <Building2 size={11} />, label: 'Tenant', cls: 'bg-blue-100 text-blue-700' };
+      case 'hybrid':
+        return { icon: <Layers size={11} />, label: 'Híbrido', cls: 'bg-amber-100 text-amber-700' };
+      default:
+        return { icon: <UserCheck size={11} />, label: 'Básico', cls: 'bg-gray-100 text-gray-600' };
+    }
+  };
 
   return (
     <>
@@ -47,11 +58,22 @@ export function ApplicationsView({ applications, plans, onAdd, onEdit, onDelete,
                       <h3 className="font-semibold text-gray-900 truncate">{app.name}</h3>
                       <p className="text-xs text-gray-500 mt-0.5">{app.slug}</p>
                     </div>
-                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full flex-shrink-0 ${
-                      app.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                    }`}>
-                      {app.is_active ? 'Activo' : 'Inactivo'}
-                    </span>
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                        app.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {app.is_active ? 'Activo' : 'Inactivo'}
+                      </span>
+                      {(() => {
+                        const badge = authTypeBadge(app.auth_type || 'basic');
+                        return (
+                          <span className={`px-2 py-0.5 text-xs font-medium rounded-full flex items-center gap-1 ${badge.cls}`}>
+                            {badge.icon}
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
+                    </div>
                   </div>
 
                   <div className="space-y-2">
