@@ -335,28 +335,33 @@ Deno.serve(async (req: Request) => {
 
             // Fallback: match by name (case-insensitive) when slug didn't match
             if (!foundExisting) {
-              const { data: byName } = await supabase
+              const { data: byNameRows } = await supabase
                 .from("tenants")
                 .select("id")
                 .ilike("name", extTenant.name)
                 .is("auth_tenant_id", null)
-                .maybeSingle();
-              if (byName) foundExisting = byName;
+                .limit(1);
+              if (byNameRows && byNameRows.length > 0) foundExisting = byNameRows[0];
             }
 
             if (foundExisting) {
               // Claim this tenant by setting auth_tenant_id and syncing fields
-              await supabase.from("tenants").update({
+              const { error: claimErr } = await supabase.from("tenants").update({
                 auth_tenant_id: extTenant.id,
                 name: extTenant.name,
                 slug: extTenant.slug,
                 domain: extTenant.domain,
                 status: extTenant.status,
               }).eq("id", foundExisting.id);
+              if (claimErr) {
+                results.errors.push(`Failed to claim tenant ${extTenant.name}: ${claimErr.message}`);
+                continue;
+              }
               sharedTenantId = foundExisting.id;
               results.tenants_updated++;
               console.log(`Claimed existing tenant ${extTenant.name} (id: ${sharedTenantId})`);
             } else {
+              console.log(`Creating new shared tenant: ${extTenant.name} (auth_tenant_id: ${extTenant.id})`);
               const { data: newShared, error: sharedErr } = await supabase
                 .from("tenants")
                 .insert({
@@ -376,12 +381,13 @@ Deno.serve(async (req: Request) => {
 
               if (sharedErr || !newShared) {
                 results.errors.push(`Failed to create shared tenant ${extTenant.name}: ${sharedErr?.message}`);
+                console.error(`Insert error for ${extTenant.name}:`, sharedErr);
                 continue;
               }
 
               sharedTenantId = newShared.id;
               results.tenants_created++;
-              console.log(`Created shared tenant: ${extTenant.name}`);
+              console.log(`Created shared tenant: ${extTenant.name} (id: ${sharedTenantId})`);
             }
           } else {
             // Update name/domain in case they changed
