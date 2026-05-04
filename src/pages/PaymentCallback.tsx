@@ -60,19 +60,27 @@ export function PaymentCallback() {
     const appBackUrl = params.get('back_url');
     if (appBackUrl) {
       try {
-        const url = new URL(appBackUrl);
+        // Decode in case it was double-encoded
+        const decoded = decodeURIComponent(appBackUrl);
+        const url = new URL(decoded);
         params.forEach((v, k) => { if (k !== 'back_url') url.searchParams.set(k, v); });
         setRedirectUrl(url.toString());
       } catch {
-        setRedirectUrl(null);
+        // If URL is invalid, use as-is and append params manually
+        const sep = appBackUrl.includes('?') ? '&' : '?';
+        const extra = Array.from(params.entries())
+          .filter(([k]) => k !== 'back_url')
+          .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+          .join('&');
+        setRedirectUrl(extra ? `${appBackUrl}${sep}${extra}` : appBackUrl);
       }
     }
   }, []);
 
   useEffect(() => {
-    if (!redirectUrl) return;
+    const target = redirectUrl || '/dashboard';
     if (countdown <= 0) {
-      window.location.href = redirectUrl;
+      window.location.href = target;
       return;
     }
     const t = setTimeout(() => setCountdown(c => c - 1), 1000);
@@ -91,40 +99,39 @@ export function PaymentCallback() {
         <h1 className="text-2xl font-bold text-gray-900 mb-2">{config.title}</h1>
         <p className="text-gray-500 text-sm leading-relaxed mb-8">{config.message}</p>
 
-        {redirectUrl ? (
-          <>
-            <div className="flex items-center justify-center gap-3 mb-6">
-              <div className="relative w-12 h-12">
-                <svg className="w-12 h-12 -rotate-90" viewBox="0 0 48 48">
-                  <circle cx="24" cy="24" r="20" fill="none" stroke="#e5e7eb" strokeWidth="4" />
-                  <circle
-                    cx="24" cy="24" r="20" fill="none"
-                    stroke="#2563eb" strokeWidth="4"
-                    strokeDasharray={`${2 * Math.PI * 20}`}
-                    strokeDashoffset={`${2 * Math.PI * 20 * (countdown / 4)}`}
-                    strokeLinecap="round"
-                    style={{ transition: 'stroke-dashoffset 1s linear' }}
-                  />
-                </svg>
-                <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-blue-600">
-                  {countdown}
-                </span>
+        {(() => {
+          const target = redirectUrl || '/dashboard';
+          return (
+            <>
+              <div className="flex items-center justify-center gap-3 mb-6">
+                <div className="relative w-12 h-12">
+                  <svg className="w-12 h-12 -rotate-90" viewBox="0 0 48 48">
+                    <circle cx="24" cy="24" r="20" fill="none" stroke="#e5e7eb" strokeWidth="4" />
+                    <circle
+                      cx="24" cy="24" r="20" fill="none"
+                      stroke="#2563eb" strokeWidth="4"
+                      strokeDasharray={`${2 * Math.PI * 20}`}
+                      strokeDashoffset={`${2 * Math.PI * 20 * (countdown / 4)}`}
+                      strokeLinecap="round"
+                      style={{ transition: 'stroke-dashoffset 1s linear' }}
+                    />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-blue-600">
+                    {countdown}
+                  </span>
+                </div>
+                <span className="text-sm text-gray-500">Redirigiendo en {countdown}s</span>
               </div>
-              <span className="text-sm text-gray-500">Redirigiendo en {countdown}s</span>
-            </div>
 
-            <a
-              href={redirectUrl}
-              className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-6 py-2.5 rounded-lg transition-colors"
-            >
-              Continuar ahora
-            </a>
-          </>
-        ) : (
-          <div className="mt-2">
-            <Loader2 className="w-6 h-6 text-blue-500 animate-spin mx-auto" />
-          </div>
-        )}
+              <a
+                href={target}
+                className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-6 py-2.5 rounded-lg transition-colors"
+              >
+                Continuar ahora
+              </a>
+            </>
+          );
+        })()}
       </div>
     </div>
   );
