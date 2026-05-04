@@ -101,7 +101,6 @@ Deno.serve(async (req: Request) => {
   try {
     const config = await getConfigFromAPI();
     const token = config.MERCADOPAGO_ACCESS_TOKEN;
-    const globalBackUrl = config.MERCADOPAGO_BACK_URL || "";
 
     let subscription: any = null;
     let plan: any = null;
@@ -240,15 +239,35 @@ Deno.serve(async (req: Request) => {
     if (plan?.id) adminCallbackUrl.searchParams.set("plan_id", plan.id);
     if (plan?.name) adminCallbackUrl.searchParams.set("plan_name", plan.name);
 
-    const finalDestination = application?.back_url || globalBackUrl;
-    if (finalDestination) {
-      adminCallbackUrl.searchParams.set("back_url", finalDestination);
+    // Only set back_url if the application has one configured — never fall back to admin panel URL
+    if (application?.back_url) {
+      adminCallbackUrl.searchParams.set("back_url", application.back_url);
     }
 
     return redirect(adminCallbackUrl.toString());
 
   } catch (err: any) {
     console.error("subscription-callback error:", err);
-    return redirect(`${ADMIN_PANEL_URL}/payment-callback?subscription_status=pending`);
+
+    // Try to get the app's back_url even on error so the user lands on the right site
+    let errorBackUrl: string | null = null;
+    if (appId) {
+      try {
+        const supabaseUrl2 = Deno.env.get("SUPABASE_URL")!;
+        const supabaseKey2 = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        const supabase2 = createClient(supabaseUrl2, supabaseKey2);
+        const { data: appData } = await supabase2
+          .from("applications")
+          .select("back_url")
+          .eq("id", appId)
+          .maybeSingle();
+        errorBackUrl = appData?.back_url || null;
+      } catch (_) {}
+    }
+
+    const errUrl = new URL(`${ADMIN_PANEL_URL}/payment-callback`);
+    errUrl.searchParams.set("subscription_status", "pending");
+    if (errorBackUrl) errUrl.searchParams.set("back_url", errorBackUrl);
+    return redirect(errUrl.toString());
   }
 });
