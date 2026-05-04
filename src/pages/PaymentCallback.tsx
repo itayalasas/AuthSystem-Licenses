@@ -78,9 +78,9 @@ export function PaymentCallback() {
   }, []);
 
   useEffect(() => {
-    const target = redirectUrl || '/dashboard';
+    if (!redirectUrl) return; // don't redirect if no back_url — stay on page
     if (countdown <= 0) {
-      window.location.href = target;
+      window.location.href = redirectUrl;
       return;
     }
     const t = setTimeout(() => setCountdown(c => c - 1), 1000);
@@ -99,39 +99,40 @@ export function PaymentCallback() {
         <h1 className="text-2xl font-bold text-gray-900 mb-2">{config.title}</h1>
         <p className="text-gray-500 text-sm leading-relaxed mb-8">{config.message}</p>
 
-        {(() => {
-          const target = redirectUrl || '/dashboard';
-          return (
-            <>
-              <div className="flex items-center justify-center gap-3 mb-6">
-                <div className="relative w-12 h-12">
-                  <svg className="w-12 h-12 -rotate-90" viewBox="0 0 48 48">
-                    <circle cx="24" cy="24" r="20" fill="none" stroke="#e5e7eb" strokeWidth="4" />
-                    <circle
-                      cx="24" cy="24" r="20" fill="none"
-                      stroke="#2563eb" strokeWidth="4"
-                      strokeDasharray={`${2 * Math.PI * 20}`}
-                      strokeDashoffset={`${2 * Math.PI * 20 * (countdown / 4)}`}
-                      strokeLinecap="round"
-                      style={{ transition: 'stroke-dashoffset 1s linear' }}
-                    />
-                  </svg>
-                  <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-blue-600">
-                    {countdown}
-                  </span>
-                </div>
-                <span className="text-sm text-gray-500">Redirigiendo en {countdown}s</span>
+        {redirectUrl ? (
+          <>
+            <div className="flex items-center justify-center gap-3 mb-6">
+              <div className="relative w-12 h-12">
+                <svg className="w-12 h-12 -rotate-90" viewBox="0 0 48 48">
+                  <circle cx="24" cy="24" r="20" fill="none" stroke="#e5e7eb" strokeWidth="4" />
+                  <circle
+                    cx="24" cy="24" r="20" fill="none"
+                    stroke="#2563eb" strokeWidth="4"
+                    strokeDasharray={`${2 * Math.PI * 20}`}
+                    strokeDashoffset={`${2 * Math.PI * 20 * (countdown / 4)}`}
+                    strokeLinecap="round"
+                    style={{ transition: 'stroke-dashoffset 1s linear' }}
+                  />
+                </svg>
+                <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-blue-600">
+                  {countdown}
+                </span>
               </div>
-
-              <a
-                href={target}
-                className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-6 py-2.5 rounded-lg transition-colors"
-              >
-                Continuar ahora
-              </a>
-            </>
-          );
-        })()}
+              <span className="text-sm text-gray-500">Redirigiendo en {countdown}s</span>
+            </div>
+            <a
+              href={redirectUrl}
+              className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-6 py-2.5 rounded-lg transition-colors"
+            >
+              Continuar ahora
+            </a>
+          </>
+        ) : (
+          <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-4">
+            No hay URL de retorno configurada para esta aplicación. Configura el campo
+            <strong> "URL de retorno tras pago"</strong> en la configuración de la aplicación.
+          </div>
+        )}
       </div>
     </div>
   );
