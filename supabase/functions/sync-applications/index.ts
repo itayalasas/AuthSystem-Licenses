@@ -439,6 +439,14 @@ Deno.serve(async (req: Request) => {
               { onConflict: "tenant_id, external_user_id" }
             );
 
+            // Also keep application_users.tenant_id in sync for this member
+            await supabase
+              .from("application_users")
+              .update({ tenant_id: sharedTenantId })
+              .eq("external_user_id", member.id)
+              .eq("application_id", internalAppId)
+              .is("tenant_id", null);
+
             results.tenant_members_synced++;
           }
         }
