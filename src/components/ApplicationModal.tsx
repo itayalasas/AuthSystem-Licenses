@@ -6,7 +6,7 @@ import { useToast } from '../hooks/useToast';
 
 function buildCallbackUrl(applicationId: string): string {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-  const base = `${supabaseUrl}/functions/v1/admin-api/subscription-callback`;
+  const base = `${supabaseUrl}/functions/v1/subscription-callback`;
   const u = new URL(base);
   u.searchParams.set('app_id', applicationId);
   return u.toString();

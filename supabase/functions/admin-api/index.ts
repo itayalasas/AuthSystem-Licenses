@@ -1289,7 +1289,7 @@ Deno.serve(async (req: Request) => {
       // and then redirects the user to the app's own back_url with status query params.
       // MERCADOPAGO_BACK_URL is only used as a last-resort fallback when no app back_url is set.
       const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-      const platformCallbackBase = `${supabaseUrl}/functions/v1/admin-api/subscription-callback`;
+      const platformCallbackBase = `${supabaseUrl}/functions/v1/subscription-callback`;
       const platformCallbackUrl = new URL(platformCallbackBase);
       if (plan.application_id) platformCallbackUrl.searchParams.set("app_id", plan.application_id);
       const mercadopagoBackUrl = platformCallbackUrl.toString();

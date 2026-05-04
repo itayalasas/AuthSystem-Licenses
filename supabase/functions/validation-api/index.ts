@@ -49,7 +49,7 @@ async function enrichEntitlements(supabase: any, entitlements: any) {
 }
 
 function buildCallbackUrl(supabaseUrl: string, applicationId: string): string {
-  const base = `${supabaseUrl}/functions/v1/admin-api/subscription-callback`;
+  const base = `${supabaseUrl}/functions/v1/subscription-callback`;
   const u = new URL(base);
   u.searchParams.set('app_id', applicationId);
   return u.toString();
