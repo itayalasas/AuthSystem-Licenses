@@ -144,8 +144,26 @@ Deno.serve(async (req: Request) => {
     let mpStatus = "pending";
     let mpPlanId: string | null = null;
 
-    // Step 1 — buscar suscripcion en DB por preapproval_id (camino rapido, sin llamar a MP)
+    // Step 1a — el preapproval_id puede ser en realidad el external_reference (= subscription.id)
+    // que MP devuelve al back_url. Intentar buscarlo como subscription ID primero.
     if (preapprovalId) {
+      const { data: subById } = await supabase
+        .from("subscriptions")
+        .select("id, status, plan_id, tenant_id, mp_preapproval_id, plans(id, name, application_id, billing_cycle, entitlements)")
+        .eq("id", preapprovalId)
+        .maybeSingle();
+
+      if (subById) {
+        subscription = subById;
+        plan = subById.plans;
+        // We found via external_reference: treat as authorized since MP confirmed payment
+        mpStatus = "authorized";
+        console.log("Found subscription by external_reference (subscription id):", preapprovalId);
+      }
+    }
+
+    // Step 1b — buscar suscripcion en DB por mp_preapproval_id real
+    if (!subscription && preapprovalId) {
       const { data: sub } = await supabase
         .from("subscriptions")
         .select("id, status, plan_id, tenant_id, mp_preapproval_id, plans(id, name, application_id, billing_cycle, entitlements)")
@@ -156,13 +174,12 @@ Deno.serve(async (req: Request) => {
         subscription = sub;
         plan = sub.plans;
         mpStatus = sub.status || "pending";
+        console.log("Found subscription by mp_preapproval_id:", preapprovalId);
       }
     }
 
-    // Step 2 — si no encontramos por preapproval_id, buscar el plan desde DB via app_id
-    // y luego consultar MP para el status real
+    // Step 2 — si no encontramos suscripcion, buscar el plan desde MP y luego la suscripcion del tenant
     if (!plan && appId) {
-      // Buscar el plan de MP que corresponde a esta app consultando MP con el preapproval_id
       if (preapprovalId && token && token !== "your_mercadopago_access_token_here") {
         try {
           const mpRes = await fetch(`https://api.mercadopago.com/preapproval/${preapprovalId}`, {
@@ -172,8 +189,24 @@ Deno.serve(async (req: Request) => {
             const mpData = await mpRes.json();
             mpStatus = mpData.status || "pending";
             mpPlanId = mpData.preapproval_plan_id || null;
+            const mpExternalRef = mpData.external_reference || null;
 
-            if (mpPlanId) {
+            console.log("MP preapproval status:", mpStatus, "plan_id:", mpPlanId, "external_ref:", mpExternalRef);
+
+            // Si MP devuelve el external_reference, buscar la suscripcion por ese ID
+            if (mpExternalRef && !subscription) {
+              const { data: subByRef } = await supabase
+                .from("subscriptions")
+                .select("id, status, plan_id, tenant_id, mp_preapproval_id, plans(id, name, application_id, billing_cycle, entitlements)")
+                .eq("id", mpExternalRef)
+                .maybeSingle();
+              if (subByRef) {
+                subscription = subByRef;
+                plan = subByRef.plans;
+              }
+            }
+
+            if (!plan && mpPlanId) {
               const { data: planData } = await supabase
                 .from("plans")
                 .select("id, name, application_id, entitlements, billing_cycle")
@@ -187,8 +220,7 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // Si MP no respondio o no hay token, buscar cualquier plan activo de esta app
-      // para poder obtener el application_id y de ahi el back_url
+      // Fallback: buscar cualquier plan activo de esta app para obtener application_id y back_url
       if (!plan) {
         const { data: anyPlan } = await supabase
           .from("plans")
@@ -201,7 +233,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Step 3 — si MP dice authorized, actualizar suscripcion y licencia
+    // Step 3 — si el pago fue aprobado, actualizar suscripcion y licencia
     if (mpStatus === "authorized" && plan) {
       const now = new Date();
       const billingCycle = plan.billing_cycle || "monthly";
@@ -210,6 +242,7 @@ Deno.serve(async (req: Request) => {
       );
 
       if (subscription) {
+        // Actualizar la suscripcion encontrada, cambiando el plan si es necesario
         await supabase
           .from("subscriptions")
           .update({
@@ -230,12 +263,19 @@ Deno.serve(async (req: Request) => {
         await updateOrCreateLicense(supabase, subscription.id);
         console.log("Updated subscription:", subscription.id, "plan:", plan.id);
       } else {
-        // Buscar suscripcion activa/trial para este tenant via app
+        // No encontramos la suscripcion por ID: buscar cualquier suscripcion trial/pending
+        // del tenant para esta aplicacion y actualizarla al nuevo plan
         const resolvedAppId = plan.application_id || appId;
         const { data: subToUpdate } = await supabase
           .from("subscriptions")
           .select("id, tenant_id")
-          .eq("plan_id", plan.id)
+          .in("plan_id",
+            (await supabase
+              .from("plans")
+              .select("id")
+              .eq("application_id", resolvedAppId)
+            ).data?.map((p: any) => p.id) ?? []
+          )
           .is("mp_preapproval_id", null)
           .in("status", ["trialing", "active", "pending"])
           .order("created_at", { ascending: false })
@@ -246,6 +286,7 @@ Deno.serve(async (req: Request) => {
           await supabase
             .from("subscriptions")
             .update({
+              plan_id: plan.id,
               status: "active",
               period_start: now.toISOString(),
               period_end: periodEnd.toISOString(),
@@ -256,7 +297,7 @@ Deno.serve(async (req: Request) => {
 
           await updateOrCreateLicense(supabase, subToUpdate.id);
           subscription = subToUpdate;
-          console.log("Linked preapproval to subscription:", subToUpdate.id);
+          console.log("Linked preapproval to subscription:", subToUpdate.id, "new plan:", plan.id);
         }
       }
     }
