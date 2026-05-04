@@ -1217,8 +1217,15 @@ Deno.serve(async (req: Request) => {
       }
 
       try {
-        const mpResponse = await fetch(mercadopagoApiUrl, {
-          method: "POST",
+        // If plan already has an MP id, update it via PUT; otherwise create via POST
+        const isUpdate = !!plan.mp_preapproval_plan_id;
+        const mpUrl = isUpdate
+          ? `https://api.mercadopago.com/preapproval_plan/${plan.mp_preapproval_plan_id}`
+          : mercadopagoApiUrl;
+        const mpMethod = isUpdate ? "PUT" : "POST";
+
+        const mpResponse = await fetch(mpUrl, {
+          method: mpMethod,
           headers: {
             "Authorization": `Bearer ${mercadopagoAccessToken}`,
             "Content-Type": "application/json"
