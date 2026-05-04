@@ -587,89 +587,104 @@ Deno.serve(async (req: Request) => {
     }
 
     // Public callback endpoint — MercadoPago redirects here after checkout.
-    // Resolves subscription status and redirects the user to the tenant's back_url.
-    // URL: GET /subscription-callback?preapproval_id=xxx OR ?external_reference=xxx&app_id=xxx
+    // MP sends: ?preapproval_id=xxx (the new subscription id)
+    // We also embed ?app_id=xxx when building the plan's back_url so we know which app to redirect to.
+    // Flow: resolve preapproval → get plan → get app back_url → redirect tenant with status params.
     if (path === "subscription-callback" && method === "GET") {
       const preapprovalId = url.searchParams.get("preapproval_id");
-      const externalRef = url.searchParams.get("external_reference");
       const appId = url.searchParams.get("app_id");
 
       let subscription: any = null;
       let plan: any = null;
       let application: any = null;
+      let mpStatus = "pending";
+      let mpPlanId: string | null = null;
 
       try {
-        // Resolve by preapproval_id first (most reliable)
+        const config = await getConfigFromAPI();
+        const token = config.MERCADOPAGO_ACCESS_TOKEN;
+        const globalBackUrl = config.MERCADOPAGO_BACK_URL || "";
+
+        // Step 1 — try to find the subscription already recorded in our DB
         if (preapprovalId) {
           const { data: sub } = await supabase
             .from("subscriptions")
-            .select("*, plans(*), tenants(*, applications(*))")
+            .select("id, status, plan_id, plans(id, name, application_id), tenants(id)")
             .eq("mp_preapproval_id", preapprovalId)
             .maybeSingle();
-          subscription = sub;
-          plan = sub?.plans;
-          application = sub?.tenants?.applications;
+
+          if (sub) {
+            subscription = sub;
+            plan = sub.plans;
+            mpStatus = sub.status || "pending";
+          }
         }
 
-        // Fallback: resolve by external_reference + app_id
-        if (!subscription && externalRef && appId) {
+        // Step 2 — if not in DB yet, ask MP directly for the preapproval status
+        if (!subscription && preapprovalId && token && token !== "your_mercadopago_access_token_here") {
+          try {
+            const mpRes = await fetch(`https://api.mercadopago.com/preapproval/${preapprovalId}`, {
+              headers: { "Authorization": `Bearer ${token}` }
+            });
+            if (mpRes.ok) {
+              const mpData = await mpRes.json();
+              mpStatus = mpData.status || "pending";
+              mpPlanId = mpData.preapproval_plan_id || null;
+
+              // Try to match the plan via mp_preapproval_plan_id
+              if (mpPlanId) {
+                const { data: planData } = await supabase
+                  .from("plans")
+                  .select("id, name, application_id")
+                  .eq("mp_preapproval_plan_id", mpPlanId)
+                  .maybeSingle();
+                plan = planData;
+              }
+            }
+          } catch (_) {}
+        }
+
+        // Step 3 — resolve the application from plan or from app_id query param
+        const resolvedAppId = plan?.application_id || appId;
+        if (resolvedAppId) {
           const { data: appData } = await supabase
             .from("applications")
             .select("id, back_url")
-            .eq("id", appId)
+            .eq("id", resolvedAppId)
             .maybeSingle();
           application = appData;
         }
 
-        // If we still don't have the subscription, try fetching status from MP directly
-        let mpStatus = "pending";
-        if (!subscription && preapprovalId) {
-          try {
-            const config = await getConfigFromAPI();
-            const token = config.MERCADOPAGO_ACCESS_TOKEN;
-            if (token && token !== "your_mercadopago_access_token_here") {
-              const mpRes = await fetch(`https://api.mercadopago.com/preapproval/${preapprovalId}`, {
-                headers: { "Authorization": `Bearer ${token}` }
-              });
-              if (mpRes.ok) {
-                const mpData = await mpRes.json();
-                mpStatus = mpData.status || "pending";
-              }
-            }
-          } catch (_) {}
-        } else if (subscription) {
-          mpStatus = subscription.status || "pending";
-        }
-
-        // Determine redirect URL
-        const tenantBackUrl = application?.back_url;
-        const config = await getConfigFromAPI();
-        const globalBackUrl = config.MERCADOPAGO_BACK_URL || "";
-        const baseRedirectUrl = tenantBackUrl || globalBackUrl;
+        // Step 4 — determine final redirect target
+        // Priority: app's own back_url → global MERCADOPAGO_BACK_URL → fallback page
+        const baseRedirectUrl = application?.back_url || globalBackUrl;
 
         if (!baseRedirectUrl) {
+          const statusLabel: Record<string, string> = {
+            authorized: "Suscripción activada",
+            pending: "Pago pendiente",
+            cancelled: "Suscripción cancelada",
+            paused: "Suscripción pausada",
+          };
           return new Response(
-            `<!DOCTYPE html><html><body><h2>Suscripción procesada</h2><p>Estado: <strong>${mpStatus}</strong></p><p>Podés cerrar esta ventana.</p></body></html>`,
+            `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Suscripción</title><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f5f5f5}.card{background:white;padding:2rem 3rem;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.08);text-align:center}h2{margin:0 0 .5rem;color:#111}p{color:#555;margin:0}</style></head><body><div class="card"><h2>${statusLabel[mpStatus] || "Suscripción procesada"}</h2><p>Estado: <strong>${mpStatus}</strong></p><p style="margin-top:1rem;font-size:.85rem;color:#888">Podés cerrar esta ventana.</p></div></body></html>`,
             { status: 200, headers: { "Content-Type": "text/html" } }
           );
         }
 
-        // Build redirect URL with status params
+        // Step 5 — redirect to tenant with status params
         const redirectUrl = new URL(baseRedirectUrl);
         redirectUrl.searchParams.set("subscription_status", mpStatus);
         if (preapprovalId) redirectUrl.searchParams.set("preapproval_id", preapprovalId);
         if (subscription?.id) redirectUrl.searchParams.set("subscription_id", subscription.id);
         if (plan?.id) redirectUrl.searchParams.set("plan_id", plan.id);
-        if (plan?.name) redirectUrl.searchParams.set("plan_name", plan.name);
-        if (externalRef) redirectUrl.searchParams.set("external_reference", externalRef);
+        if (plan?.name) redirectUrl.searchParams.set("plan_name", encodeURIComponent(plan.name));
 
         return new Response(null, {
           status: 302,
-          headers: {
-            ...corsHeaders,
-            "Location": redirectUrl.toString(),
-          }
+          headers: { ...corsHeaders, "Location": redirectUrl.toString() }
         });
+
       } catch (err: any) {
         console.error("subscription-callback error:", err);
         return new Response(
@@ -1269,29 +1284,15 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      // Resolve the app's back_url to build the callback URL.
-      // MercadoPago will redirect to this platform's /subscription-callback endpoint,
-      // which then resolves the status and forwards to the tenant's own back_url.
-      let appBackUrl: string | null = null;
-      if (plan.application_id) {
-        const { data: appData } = await supabase
-          .from("applications")
-          .select("back_url")
-          .eq("id", plan.application_id)
-          .maybeSingle();
-        appBackUrl = appData?.back_url || null;
-      }
-
-      // Build the platform callback URL that MP will redirect to.
-      // This URL receives the preapproval_id from MP, looks up the subscription,
-      // and redirects to the tenant's back_url with status params.
+      // The back_url sent to MercadoPago is ALWAYS this platform's /subscription-callback.
+      // That endpoint resolves which app triggered the checkout (via preapproval_id → plan → app)
+      // and then redirects the user to the app's own back_url with status query params.
+      // MERCADOPAGO_BACK_URL is only used as a last-resort fallback when no app back_url is set.
       const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
       const platformCallbackBase = `${supabaseUrl}/functions/v1/admin-api/subscription-callback`;
       const platformCallbackUrl = new URL(platformCallbackBase);
       if (plan.application_id) platformCallbackUrl.searchParams.set("app_id", plan.application_id);
-
-      // If neither app nor global back_url configured, MP still needs a valid URL
-      const mercadopagoBackUrl = platformCallbackUrl.toString() || globalBackUrl || "https://www.yoursite.com";
+      const mercadopagoBackUrl = platformCallbackUrl.toString();
 
       const frequency = plan.billing_cycle === "annual" ? 12 : 1;
       const frequencyType = "months";
