@@ -138,37 +138,57 @@ Deno.serve(async (req: Request) => {
       errors: [] as string[],
     };
 
+    // Track which external_app_ids are active in AuthSystem for deactivation pass
+    const activeExternalIds = new Set(externalApps.map(a => a.application_id));
+
+    // Deactivate apps that no longer exist in AuthSystem
+    const appsToDeactivate = (existingApps || []).filter(
+      a => !activeExternalIds.has(a.external_app_id) && a.is_active
+    );
+    if (appsToDeactivate.length > 0) {
+      const ids = appsToDeactivate.map(a => a.id);
+      await supabase.from("applications").update({ is_active: false }).in("id", ids);
+      console.log(`Deactivated ${ids.length} apps no longer in AuthSystem`);
+    }
+
     for (const extApp of externalApps) {
       const authType = extApp.auth_type || "basic";
       const existingApp = appByExternalId.get(extApp.application_id);
 
       let internalAppId: string;
 
+      const slug = extApp.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+
       if (existingApp) {
-        // Update auth_type if it changed
-        if (existingApp.auth_type !== authType) {
-          await supabase
-            .from("applications")
-            .update({
-              auth_type: authType,
-              is_active: extApp.status === "active",
-              settings: {
-                external_id: extApp.id,
-                status: extApp.status,
-                environment_urls: extApp.environment_urls,
-                synced_at: new Date().toISOString(),
-              },
-            })
-            .eq("id", existingApp.id);
-          results.apps_updated++;
+        // Always update all fields from AuthSystem — name, slug, url, auth_type, status
+        const { error: updateError } = await supabase
+          .from("applications")
+          .update({
+            name: extApp.name,
+            slug,
+            webhook_url: extApp.url,
+            auth_type: authType,
+            is_active: extApp.status === "active",
+            settings: {
+              external_id: extApp.id,
+              status: extApp.status,
+              environment_urls: extApp.environment_urls,
+              synced_at: new Date().toISOString(),
+            },
+          })
+          .eq("id", existingApp.id);
+
+        if (updateError) {
+          results.apps_failed++;
+          results.errors.push(`Failed to update ${extApp.name}: ${updateError.message}`);
+          continue;
         }
         internalAppId = existingApp.id;
+        results.apps_updated++;
       } else {
-        const slug = extApp.name
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-+|-+$/g, "");
-
         const { data: createdApp, error: insertError } = await supabase
           .from("applications")
           .insert({
