@@ -333,13 +333,14 @@ Deno.serve(async (req: Request) => {
               if (bySlug) foundExisting = bySlug;
             }
 
-            // Fallback: match by name (case-insensitive) when slug didn't match
+            // Fallback: match by name only on shared tenants (no personal owner)
             if (!foundExisting) {
               const { data: byNameRows } = await supabase
                 .from("tenants")
                 .select("id")
                 .ilike("name", extTenant.name)
                 .is("auth_tenant_id", null)
+                .is("owner_user_id", null)
                 .limit(1);
               if (byNameRows && byNameRows.length > 0) foundExisting = byNameRows[0];
             }
