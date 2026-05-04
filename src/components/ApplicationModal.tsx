@@ -6,10 +6,14 @@ import { useToast } from '../hooks/useToast';
 
 function buildCallbackUrl(applicationId: string): string {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-  const base = `${supabaseUrl}/functions/v1/subscription-callback`;
-  const u = new URL(base);
-  u.searchParams.set('app_id', applicationId);
-  return u.toString();
+  if (!supabaseUrl) return `/functions/v1/subscription-callback?app_id=${encodeURIComponent(applicationId)}`;
+  try {
+    const u = new URL(`${supabaseUrl}/functions/v1/subscription-callback`);
+    u.searchParams.set('app_id', applicationId);
+    return u.toString();
+  } catch {
+    return `${supabaseUrl}/functions/v1/subscription-callback?app_id=${encodeURIComponent(applicationId)}`;
+  }
 }
 
 interface ApplicationModalProps {
