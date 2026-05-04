@@ -586,6 +586,99 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Public callback endpoint — MercadoPago redirects here after checkout.
+    // Resolves subscription status and redirects the user to the tenant's back_url.
+    // URL: GET /subscription-callback?preapproval_id=xxx OR ?external_reference=xxx&app_id=xxx
+    if (path === "subscription-callback" && method === "GET") {
+      const preapprovalId = url.searchParams.get("preapproval_id");
+      const externalRef = url.searchParams.get("external_reference");
+      const appId = url.searchParams.get("app_id");
+
+      let subscription: any = null;
+      let plan: any = null;
+      let application: any = null;
+
+      try {
+        // Resolve by preapproval_id first (most reliable)
+        if (preapprovalId) {
+          const { data: sub } = await supabase
+            .from("subscriptions")
+            .select("*, plans(*), tenants(*, applications(*))")
+            .eq("mp_preapproval_id", preapprovalId)
+            .maybeSingle();
+          subscription = sub;
+          plan = sub?.plans;
+          application = sub?.tenants?.applications;
+        }
+
+        // Fallback: resolve by external_reference + app_id
+        if (!subscription && externalRef && appId) {
+          const { data: appData } = await supabase
+            .from("applications")
+            .select("id, back_url")
+            .eq("id", appId)
+            .maybeSingle();
+          application = appData;
+        }
+
+        // If we still don't have the subscription, try fetching status from MP directly
+        let mpStatus = "pending";
+        if (!subscription && preapprovalId) {
+          try {
+            const config = await getConfigFromAPI();
+            const token = config.MERCADOPAGO_ACCESS_TOKEN;
+            if (token && token !== "your_mercadopago_access_token_here") {
+              const mpRes = await fetch(`https://api.mercadopago.com/preapproval/${preapprovalId}`, {
+                headers: { "Authorization": `Bearer ${token}` }
+              });
+              if (mpRes.ok) {
+                const mpData = await mpRes.json();
+                mpStatus = mpData.status || "pending";
+              }
+            }
+          } catch (_) {}
+        } else if (subscription) {
+          mpStatus = subscription.status || "pending";
+        }
+
+        // Determine redirect URL
+        const tenantBackUrl = application?.back_url;
+        const config = await getConfigFromAPI();
+        const globalBackUrl = config.MERCADOPAGO_BACK_URL || "";
+        const baseRedirectUrl = tenantBackUrl || globalBackUrl;
+
+        if (!baseRedirectUrl) {
+          return new Response(
+            `<!DOCTYPE html><html><body><h2>Suscripción procesada</h2><p>Estado: <strong>${mpStatus}</strong></p><p>Podés cerrar esta ventana.</p></body></html>`,
+            { status: 200, headers: { "Content-Type": "text/html" } }
+          );
+        }
+
+        // Build redirect URL with status params
+        const redirectUrl = new URL(baseRedirectUrl);
+        redirectUrl.searchParams.set("subscription_status", mpStatus);
+        if (preapprovalId) redirectUrl.searchParams.set("preapproval_id", preapprovalId);
+        if (subscription?.id) redirectUrl.searchParams.set("subscription_id", subscription.id);
+        if (plan?.id) redirectUrl.searchParams.set("plan_id", plan.id);
+        if (plan?.name) redirectUrl.searchParams.set("plan_name", plan.name);
+        if (externalRef) redirectUrl.searchParams.set("external_reference", externalRef);
+
+        return new Response(null, {
+          status: 302,
+          headers: {
+            ...corsHeaders,
+            "Location": redirectUrl.toString(),
+          }
+        });
+      } catch (err: any) {
+        console.error("subscription-callback error:", err);
+        return new Response(
+          `<!DOCTYPE html><html><body><h2>Error procesando la suscripción</h2><p>Por favor contacta al soporte.</p></body></html>`,
+          { status: 500, headers: { "Content-Type": "text/html" } }
+        );
+      }
+    }
+
     if (path === "audit-log" && method === "GET") {
       const limit = parseInt(url.searchParams.get("limit") || "50");
       const offset = parseInt(url.searchParams.get("offset") || "0");
@@ -1161,7 +1254,7 @@ Deno.serve(async (req: Request) => {
 
       const mercadopagoApiUrl = config.MERCADOPAGO_API_URL || "https://api.mercadopago.com/preapproval_plan";
       const mercadopagoAccessToken = config.MERCADOPAGO_ACCESS_TOKEN;
-      const mercadopagoBackUrl = config.MERCADOPAGO_BACK_URL || "https://www.yoursite.com";
+      const globalBackUrl = config.MERCADOPAGO_BACK_URL || "";
 
       if (!mercadopagoAccessToken || mercadopagoAccessToken === "your_mercadopago_access_token_here") {
         return new Response(
@@ -1175,6 +1268,30 @@ Deno.serve(async (req: Request) => {
           }
         );
       }
+
+      // Resolve the app's back_url to build the callback URL.
+      // MercadoPago will redirect to this platform's /subscription-callback endpoint,
+      // which then resolves the status and forwards to the tenant's own back_url.
+      let appBackUrl: string | null = null;
+      if (plan.application_id) {
+        const { data: appData } = await supabase
+          .from("applications")
+          .select("back_url")
+          .eq("id", plan.application_id)
+          .maybeSingle();
+        appBackUrl = appData?.back_url || null;
+      }
+
+      // Build the platform callback URL that MP will redirect to.
+      // This URL receives the preapproval_id from MP, looks up the subscription,
+      // and redirects to the tenant's back_url with status params.
+      const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+      const platformCallbackBase = `${supabaseUrl}/functions/v1/admin-api/subscription-callback`;
+      const platformCallbackUrl = new URL(platformCallbackBase);
+      if (plan.application_id) platformCallbackUrl.searchParams.set("app_id", plan.application_id);
+
+      // If neither app nor global back_url configured, MP still needs a valid URL
+      const mercadopagoBackUrl = platformCallbackUrl.toString() || globalBackUrl || "https://www.yoursite.com";
 
       const frequency = plan.billing_cycle === "annual" ? 12 : 1;
       const frequencyType = "months";

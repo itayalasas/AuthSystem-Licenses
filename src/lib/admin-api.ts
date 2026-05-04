@@ -55,6 +55,7 @@ interface Application {
   external_app_id: string;
   api_key: string;
   webhook_url?: string;
+  back_url?: string;
   settings: Record<string, any>;
   is_active: boolean;
   plan_id?: string;

@@ -17,6 +17,7 @@ export function ApplicationModal({ application, onClose, onSave, onDelete }: App
     slug: application?.slug || '',
     external_app_id: application?.external_app_id || '',
     webhook_url: application?.webhook_url || '',
+    back_url: (application as any)?.back_url || '',
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -167,7 +168,7 @@ export function ApplicationModal({ application, onClose, onSave, onDelete }: App
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Webhook URL (opcional)
+              Webhook URL <span className="text-gray-400 font-normal">(opcional)</span>
             </label>
             <input
               type="url"
@@ -177,6 +178,25 @@ export function ApplicationModal({ application, onClose, onSave, onDelete }: App
               placeholder="https://mi-app.com/webhook"
             />
             <p className="text-xs text-gray-500 mt-1">URL para recibir notificaciones de eventos</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              URL de retorno tras pago <span className="text-gray-400 font-normal">(opcional)</span>
+            </label>
+            <input
+              type="url"
+              value={formData.back_url}
+              onChange={e => setFormData({ ...formData, back_url: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="https://mi-app.com/suscripcion/resultado"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Tras el checkout de MercadoPago, el usuario será redirigido aquí con los parámetros{' '}
+              <code className="bg-gray-100 px-1 rounded">subscription_status</code>,{' '}
+              <code className="bg-gray-100 px-1 rounded">subscription_id</code> y{' '}
+              <code className="bg-gray-100 px-1 rounded">plan_id</code>
+            </p>
           </div>
 
           <div className="flex gap-3 pt-4">
