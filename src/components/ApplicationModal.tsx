@@ -3,9 +3,10 @@ import { X, Copy, Check, Trash2, ArrowRightLeft } from 'lucide-react';
 import { type Application } from '../lib/admin-api';
 import { ConfirmModal } from './ConfirmModal';
 import { useToast } from '../hooks/useToast';
+import { ConfigService } from '../lib/config';
 
 function buildCallbackUrl(applicationId: string): string {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+  const supabaseUrl = ConfigService.getVariable('SUPABASE_URL') || ConfigService.getVariable('VITE_SUPABASE_URL') || '';
   if (!supabaseUrl) return `/functions/v1/subscription-callback?app_id=${encodeURIComponent(applicationId)}`;
   try {
     const u = new URL(`${supabaseUrl}/functions/v1/subscription-callback`);
