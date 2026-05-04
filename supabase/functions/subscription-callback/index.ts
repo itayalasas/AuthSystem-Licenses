@@ -102,15 +102,27 @@ Deno.serve(async (req: Request) => {
 
   const url = new URL(req.url);
 
-  // MP sometimes appends its params with a second "?" instead of "&", producing a malformed URL.
-  // e.g. "...callback?app_id=xxx?preapproval_id=yyy"
-  // Standard URLSearchParams only splits on the first "?", so we need to flatten any extra "?" into "&".
-  const rawSearch = req.url.includes('?') ? req.url.slice(req.url.indexOf('?') + 1) : '';
-  const normalizedSearch = rawSearch.replace(/\?/g, '&');
-  const allParams = new URLSearchParams(normalizedSearch);
+  // MP appends its own params with a second "?" instead of "&" because our back_url already
+  // contains "?app_id=...". Supabase edge runtime percent-encodes the second "?" as "%3F",
+  // so app_id ends up as "uuid%3Fpreapproval_id%3Dvalue" which decodes to "uuid?preapproval_id=value".
+  // We handle this by splitting on the decoded "?" within param values.
+  const rawAppId = url.searchParams.get("app_id") ?? "";
 
-  const preapprovalId = allParams.get("preapproval_id");
-  const appId = allParams.get("app_id");
+  let appId: string | null = null;
+  let preapprovalId: string | null = url.searchParams.get("preapproval_id");
+
+  if (rawAppId.includes('?')) {
+    // The second "?" and its params got folded into the app_id value
+    const [cleanAppId, embeddedQuery] = rawAppId.split('?');
+    appId = cleanAppId || null;
+    const embedded = new URLSearchParams(embeddedQuery);
+    if (!preapprovalId) preapprovalId = embedded.get("preapproval_id");
+  } else {
+    appId = rawAppId || null;
+  }
+
+  console.log("req.url:", req.url);
+  console.log("appId:", appId, "preapprovalId:", preapprovalId);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -250,8 +262,10 @@ Deno.serve(async (req: Request) => {
     }
 
     // Step 4 — obtener back_url de la aplicacion en la DB
-    // Usar plan.application_id si disponible, sino usar appId directamente de los params de la URL
-    const backUrl = await resolveBackUrl(plan?.application_id ?? appId);
+    const resolvedAppId = plan?.application_id ?? appId;
+    console.log("resolvedAppId:", resolvedAppId, "plan?.application_id:", plan?.application_id, "appId:", appId);
+    const backUrl = await resolveBackUrl(resolvedAppId);
+    console.log("backUrl result:", backUrl);
 
     // Step 5 — armar URL final al panel con todos los params
     const adminCallbackUrl = new URL(`${ADMIN_PANEL_URL}/payment-callback`);
