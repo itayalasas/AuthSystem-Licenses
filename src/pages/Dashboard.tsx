@@ -222,11 +222,15 @@ export function Dashboard() {
       const result = await response.json();
 
       if (result.success) {
-        const summary = result.summary;
+        const s = result.summary;
+        const appsNew = s.apps_created ?? s.newly_created ?? 0;
+        const appsUpdated = s.apps_updated ?? 0;
+        const users = s.users_synced ?? s.total_users_synced ?? 0;
+        const tenants = s.tenants_created ?? s.total_tenants_created ?? 0;
+        const members = s.tenant_members_synced ?? 0;
         success(
-          `Sincronización completada: ${summary.newly_created} apps nuevas, ` +
-          `${summary.total_users_synced} usuarios, ${summary.total_tenants_created} clientes creados, ` +
-          `${summary.total_relationships_created} relaciones establecidas`
+          `Sincronización completada: ${appsNew} apps nuevas, ${appsUpdated} actualizadas, ` +
+          `${users} usuarios, ${tenants} tenants creados, ${members} miembros sincronizados`
         );
         await Promise.all([refreshApplications(), refreshTenants()]);
       } else {
