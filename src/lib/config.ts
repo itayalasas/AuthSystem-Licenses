@@ -1,5 +1,5 @@
 const ENV_API_URL = 'https://ffihaeatoundrjzgtpzk.supabase.co/functions/v1/get-env';
-const ACCESS_KEY = '033b6f38b0c5b902c90dbb1f371c389f967a0afa871028da2ab5657062cab866';
+const ACCESS_KEY = '1a9c87b6d4b965b1175f30906fce683cd4f9c6d23837405a753361b6df46a60b';
 
 interface EnvConfig {
   project_name: string;
