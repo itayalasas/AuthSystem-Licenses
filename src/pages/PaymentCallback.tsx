@@ -64,6 +64,22 @@ export function PaymentCallback() {
 
     const params = new URLSearchParams(window.location.search);
 
+    // If the edge function already resolved everything and sent us subscription_status,
+    // use those params directly — no need to call confirm-subscription again.
+    const alreadyResolved = params.get('subscription_status');
+    if (alreadyResolved) {
+      const validStatuses: PaymentStatus[] = ['authorized', 'pending', 'cancelled', 'paused'];
+      const resolvedStatus = validStatuses.includes(alreadyResolved as PaymentStatus)
+        ? (alreadyResolved as PaymentStatus)
+        : 'pending';
+      setStatus(resolvedStatus);
+      const planNameParam = params.get('plan_name');
+      if (planNameParam) setPlanName(decodeURIComponent(planNameParam));
+      const backUrl = params.get('back_url');
+      if (backUrl) buildRedirectUrl(decodeURIComponent(backUrl), params);
+      return;
+    }
+
     // Extract preapproval_id — MP can embed it inside app_id if our back_url already had ?app_id=
     let preapprovalId = params.get('preapproval_id');
     const rawAppId = params.get('app_id') ?? '';
@@ -73,16 +89,8 @@ export function PaymentCallback() {
     }
 
     if (!preapprovalId) {
-      // No preapproval_id — check if we were redirected here from the edge function already
-      const subscriptionStatus = params.get('subscription_status') as PaymentStatus | null;
-      const backUrl = params.get('back_url');
-      if (subscriptionStatus && subscriptionStatus !== 'loading') {
-        setStatus(subscriptionStatus);
-        if (backUrl) buildRedirectUrl(backUrl, params);
-      } else {
-        setStatus('error');
-        setErrorDetail('No se recibió el identificador de suscripción de MercadoPago.');
-      }
+      setStatus('error');
+      setErrorDetail('No se recibió el identificador de suscripción de MercadoPago.');
       return;
     }
 
