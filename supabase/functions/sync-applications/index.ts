@@ -145,6 +145,8 @@ Deno.serve(async (req: Request) => {
       tenants_created: 0,
       tenants_updated: 0,
       tenant_members_synced: 0,
+      users_deleted: 0,
+      tenants_deleted: 0,
       errors: [] as string[],
     };
 
@@ -308,6 +310,66 @@ Deno.serve(async (req: Request) => {
         }
       }
 
+      // ── Remove users that no longer exist in AuthSystem for this app ────────
+      {
+        const activeExternalUserIds = new Set((extApp.users || []).map((u) => u.id));
+
+        const { data: dbUsers } = await supabase
+          .from("application_users")
+          .select("id, external_user_id, tenant_id")
+          .eq("application_id", internalAppId);
+
+        const usersToDelete = (dbUsers || []).filter(
+          (u) => !activeExternalUserIds.has(u.external_user_id)
+        );
+
+        for (const dbUser of usersToDelete) {
+          // Delete personal tenant and all its dependent records if it belongs to this user only
+          const personalTenantId = dbUser.tenant_id;
+          if (personalTenantId) {
+            // Check tenant is not shared (no auth_tenant_id) before deleting
+            const { data: tnt } = await supabase
+              .from("tenants")
+              .select("id, auth_tenant_id")
+              .eq("id", personalTenantId)
+              .is("auth_tenant_id", null)
+              .maybeSingle();
+
+            if (tnt) {
+              await supabase.from("tenant_members").delete().eq("tenant_id", tnt.id);
+              await supabase.from("licenses").delete().eq("tenant_id", tnt.id);
+              await supabase.from("subscription_payments").delete().eq("tenant_id", tnt.id);
+              await supabase.from("subscriptions").delete().eq("tenant_id", tnt.id);
+              await supabase.from("tenant_applications").delete().eq("tenant_id", tnt.id);
+              await supabase.from("tenants").delete().eq("id", tnt.id);
+              results.tenants_deleted++;
+            }
+          }
+
+          // Also find personal tenant by owner_user_id (in case tenant_id column is not set)
+          const { data: ownedTenant } = await supabase
+            .from("tenants")
+            .select("id")
+            .eq("owner_user_id", dbUser.external_user_id)
+            .is("auth_tenant_id", null)
+            .maybeSingle();
+
+          if (ownedTenant) {
+            await supabase.from("tenant_members").delete().eq("tenant_id", ownedTenant.id);
+            await supabase.from("licenses").delete().eq("tenant_id", ownedTenant.id);
+            await supabase.from("subscription_payments").delete().eq("tenant_id", ownedTenant.id);
+            await supabase.from("subscriptions").delete().eq("tenant_id", ownedTenant.id);
+            await supabase.from("tenant_applications").delete().eq("tenant_id", ownedTenant.id);
+            await supabase.from("tenants").delete().eq("id", ownedTenant.id);
+            results.tenants_deleted++;
+          }
+
+          await supabase.from("application_users").delete().eq("id", dbUser.id);
+          results.users_deleted++;
+          console.log(`Deleted user ${dbUser.external_user_id} and their data from app ${extApp.name}`);
+        }
+      }
+
       // ── Sync shared tenants (only for tenant/hybrid apps) ──────────────────
       if ((authType === "tenant" || authType === "hybrid") && extApp.tenants?.length) {
         for (const extTenant of extApp.tenants) {
@@ -449,6 +511,31 @@ Deno.serve(async (req: Request) => {
 
             results.tenant_members_synced++;
           }
+        }
+      }
+
+      // ── Remove shared tenants that no longer exist in AuthSystem ─────────────
+      if (authType === "tenant" || authType === "hybrid") {
+        const activeExternalTenantIds = new Set((extApp.tenants || []).map((t) => t.id));
+
+        const { data: dbSharedTenants } = await supabase
+          .from("tenants")
+          .select("id, auth_tenant_id")
+          .not("auth_tenant_id", "is", null);
+
+        const sharedToDelete = (dbSharedTenants || []).filter(
+          (t) => !activeExternalTenantIds.has(t.auth_tenant_id)
+        );
+
+        for (const tnt of sharedToDelete) {
+          await supabase.from("tenant_members").delete().eq("tenant_id", tnt.id);
+          await supabase.from("licenses").delete().eq("tenant_id", tnt.id);
+          await supabase.from("subscription_payments").delete().eq("tenant_id", tnt.id);
+          await supabase.from("subscriptions").delete().eq("tenant_id", tnt.id);
+          await supabase.from("tenant_applications").delete().eq("tenant_id", tnt.id);
+          await supabase.from("tenants").delete().eq("id", tnt.id);
+          results.tenants_deleted++;
+          console.log(`Deleted shared tenant ${tnt.auth_tenant_id} and all its data`);
         }
       }
     }
