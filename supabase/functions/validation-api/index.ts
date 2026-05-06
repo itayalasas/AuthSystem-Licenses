@@ -305,9 +305,7 @@ Deno.serve(async (req: Request) => {
             mp_back_url: buildCallbackUrl(supabaseUrl, application.id),
             mp_preapproval_plan_id: subscription.plan?.mp_preapproval_plan_id,
             mp_status: subscription.plan?.mp_status,
-            mp_cancel_url: subscription.mp_preapproval_id
-              ? `https://www.mercadopago.com.uy/subscriptions/${subscription.mp_preapproval_id}`
-              : null,
+            mp_preapproval_id: subscription.mp_preapproval_id || null,
           } : null,
           license: licenseData,
           available_plans: availablePlans,
