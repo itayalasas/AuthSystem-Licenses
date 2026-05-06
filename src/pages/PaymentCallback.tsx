@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle, Clock, XCircle, PauseCircle, Loader2 } from 'lucide-react';
+import { CheckCircle, Clock, XCircle, PauseCircle, Loader2, AlertCircle } from 'lucide-react';
 
-type PaymentStatus = 'authorized' | 'pending' | 'cancelled' | 'paused' | 'unknown';
+type PaymentStatus = 'authorized' | 'pending' | 'cancelled' | 'paused' | 'loading' | 'error';
 
 const STATUS_CONFIG: Record<PaymentStatus, {
   icon: React.ReactNode;
@@ -9,6 +9,12 @@ const STATUS_CONFIG: Record<PaymentStatus, {
   message: string;
   color: string;
 }> = {
+  loading: {
+    icon: <Loader2 className="w-14 h-14 text-blue-500 animate-spin" />,
+    title: 'Confirmando suscripción',
+    message: 'Estamos verificando el estado de tu pago con MercadoPago...',
+    color: 'text-blue-600',
+  },
   authorized: {
     icon: <CheckCircle className="w-14 h-14 text-green-500" />,
     title: 'Suscripción activada',
@@ -33,67 +39,126 @@ const STATUS_CONFIG: Record<PaymentStatus, {
     message: 'Tu suscripción está pausada. Redirigiendo...',
     color: 'text-blue-600',
   },
-  unknown: {
-    icon: <Loader2 className="w-14 h-14 text-gray-400 animate-spin" />,
-    title: 'Confirmando pago',
-    message: 'Estamos verificando el estado de tu pago...',
-    color: 'text-gray-500',
+  error: {
+    icon: <AlertCircle className="w-14 h-14 text-red-400" />,
+    title: 'Error al confirmar',
+    message: 'No pudimos verificar el estado de tu pago. Podés cerrar esta ventana e intentar nuevamente.',
+    color: 'text-red-500',
   },
 };
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 export function PaymentCallback() {
   const hasProcessed = useRef(false);
-  const [status, setStatus] = useState<PaymentStatus>('unknown');
+  const [status, setStatus] = useState<PaymentStatus>('loading');
   const [countdown, setCountdown] = useState(4);
   const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
+  const [planName, setPlanName] = useState<string | null>(null);
+  const [errorDetail, setErrorDetail] = useState<string | null>(null);
 
   useEffect(() => {
     if (hasProcessed.current) return;
     hasProcessed.current = true;
 
     const params = new URLSearchParams(window.location.search);
-    const subscriptionStatus = (params.get('subscription_status') || 'unknown') as PaymentStatus;
-    const validStatuses: PaymentStatus[] = ['authorized', 'pending', 'cancelled', 'paused'];
-    setStatus(validStatuses.includes(subscriptionStatus) ? subscriptionStatus : 'unknown');
 
-    // Build redirect URL preserving all params from MP
-    const appBackUrl = params.get('back_url');
-    if (appBackUrl) {
-      try {
-        const decoded = decodeURIComponent(appBackUrl);
-        const url = new URL(decoded);
-        params.forEach((v, k) => { if (k !== 'back_url') url.searchParams.set(k, v); });
-        setRedirectUrl(url.toString());
-      } catch {
-        const sep = appBackUrl.includes('?') ? '&' : '?';
-        const extra = Array.from(params.entries())
-          .filter(([k]) => k !== 'back_url')
-          .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-          .join('&');
-        setRedirectUrl(extra ? `${appBackUrl}${sep}${extra}` : appBackUrl);
+    // Extract preapproval_id — MP can embed it inside app_id if our back_url already had ?app_id=
+    let preapprovalId = params.get('preapproval_id');
+    const rawAppId = params.get('app_id') ?? '';
+    if (!preapprovalId && rawAppId.includes('?')) {
+      const embedded = new URLSearchParams(rawAppId.split('?')[1]);
+      preapprovalId = embedded.get('preapproval_id');
+    }
+
+    if (!preapprovalId) {
+      // No preapproval_id — check if we were redirected here from the edge function already
+      const subscriptionStatus = params.get('subscription_status') as PaymentStatus | null;
+      const backUrl = params.get('back_url');
+      if (subscriptionStatus && subscriptionStatus !== 'loading') {
+        setStatus(subscriptionStatus);
+        if (backUrl) buildRedirectUrl(backUrl, params);
+      } else {
+        setStatus('error');
+        setErrorDetail('No se recibió el identificador de suscripción de MercadoPago.');
       }
       return;
     }
 
-    // No back_url — MP may have redirected here directly bypassing the edge function.
-    // If we have a preapproval_id, bounce through the edge function to resolve back_url.
-    const preapprovalId = params.get('preapproval_id');
-    if (preapprovalId && SUPABASE_URL) {
-      const edgeFnUrl = new URL(`${SUPABASE_URL}/functions/v1/subscription-callback`);
-      edgeFnUrl.searchParams.set('preapproval_id', preapprovalId);
-      // Also forward any other params MP sent
-      params.forEach((v, k) => {
-        if (k !== 'preapproval_id') edgeFnUrl.searchParams.set(k, v);
-      });
-      window.location.replace(edgeFnUrl.toString());
-      return;
-    }
+    // Call our confirm-subscription edge function
+    confirmSubscription(preapprovalId, params);
   }, []);
 
+  async function confirmSubscription(preapprovalId: string, originalParams: URLSearchParams) {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/confirm-subscription`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ preapproval_id: preapprovalId }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        console.error('confirm-subscription error:', data);
+        setStatus('error');
+        setErrorDetail(data.error || 'Error desconocido');
+        return;
+      }
+
+      const mpStatus = data.mp_status as string;
+      const validStatuses: PaymentStatus[] = ['authorized', 'pending', 'cancelled', 'paused'];
+      const resolvedStatus = validStatuses.includes(mpStatus as PaymentStatus)
+        ? (mpStatus as PaymentStatus)
+        : 'pending';
+
+      setStatus(resolvedStatus);
+      if (data.plan_name) setPlanName(data.plan_name);
+
+      if (data.back_url) {
+        buildRedirectUrl(data.back_url, originalParams, {
+          subscription_status: mpStatus,
+          subscription_id: data.subscription_id,
+          plan_id: data.plan_id,
+          plan_name: data.plan_name,
+        });
+      }
+    } catch (err) {
+      console.error('confirm-subscription fetch error:', err);
+      setStatus('error');
+      setErrorDetail('Error de conexión al verificar el pago.');
+    }
+  }
+
+  function buildRedirectUrl(
+    backUrl: string,
+    params: URLSearchParams,
+    extra: Record<string, string | null> = {}
+  ) {
+    try {
+      const decoded = decodeURIComponent(backUrl);
+      const url = new URL(decoded);
+      params.forEach((v, k) => {
+        if (!['back_url', 'app_id', 'preapproval_id'].includes(k)) url.searchParams.set(k, v);
+      });
+      Object.entries(extra).forEach(([k, v]) => { if (v) url.searchParams.set(k, v); });
+      setRedirectUrl(url.toString());
+    } catch {
+      const sep = backUrl.includes('?') ? '&' : '?';
+      const extraStr = Object.entries(extra)
+        .filter(([, v]) => v)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v!)}`)
+        .join('&');
+      setRedirectUrl(extraStr ? `${backUrl}${sep}${extraStr}` : backUrl);
+    }
+  }
+
   useEffect(() => {
-    if (!redirectUrl) return; // don't redirect if no back_url — stay on page
+    if (!redirectUrl) return;
     if (countdown <= 0) {
       window.location.href = redirectUrl;
       return;
@@ -112,9 +177,32 @@ export function PaymentCallback() {
         </div>
 
         <h1 className="text-2xl font-bold text-gray-900 mb-2">{config.title}</h1>
+        {planName && status === 'authorized' && (
+          <p className="text-sm font-medium text-green-700 bg-green-50 rounded-lg px-3 py-1.5 inline-block mb-3">
+            Plan {planName}
+          </p>
+        )}
         <p className="text-gray-500 text-sm leading-relaxed mb-8">{config.message}</p>
 
-        {redirectUrl ? (
+        {status === 'loading' && (
+          <div className="flex justify-center gap-1.5">
+            {[0, 1, 2].map(i => (
+              <div
+                key={i}
+                className="w-2 h-2 rounded-full bg-blue-400 animate-bounce"
+                style={{ animationDelay: `${i * 0.15}s` }}
+              />
+            ))}
+          </div>
+        )}
+
+        {status === 'error' && (
+          <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-4">
+            {errorDetail || config.message}
+          </div>
+        )}
+
+        {redirectUrl && status !== 'loading' && (
           <>
             <div className="flex items-center justify-center gap-3 mb-6">
               <div className="relative w-12 h-12">
@@ -142,7 +230,9 @@ export function PaymentCallback() {
               Continuar ahora
             </a>
           </>
-        ) : (
+        )}
+
+        {!redirectUrl && status !== 'loading' && status !== 'error' && (
           <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-4">
             No hay URL de retorno configurada para esta aplicación. Configura el campo
             <strong> "URL de retorno tras pago"</strong> en la configuración de la aplicación.
