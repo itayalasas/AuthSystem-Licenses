@@ -1,23 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 
-const ENV_API_URL = 'https://ffihaeatoundrjzgtpzk.supabase.co/functions/v1/get-env';
-const ACCESS_KEY = '033b6f38b0c5b902c90dbb1f371c389f967a0afa871028da2ab5657062cab866';
-
 const ADMIN_PANEL_URL = 'https://auth-license.netlify.app';
 
-async function getConfigFromAPI(): Promise<Record<string, string>> {
-  try {
-    const response = await fetch(ENV_API_URL, {
-      headers: { 'X-Access-Key': ACCESS_KEY },
-    });
-    if (!response.ok) return {};
-    const data = await response.json();
-    return data.variables || {};
-  } catch {
-    return {};
-  }
-}
+// Hardcoded until moved to secrets
+const MP_ACCESS_TOKEN = 'APP_USR-6852491126052518-050319-afbaf6321b77ff2c148077e4d41fc53b-2519338363';
 
 function redirect(location: string): Response {
   return new Response(null, {
@@ -136,9 +123,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const config = await getConfigFromAPI();
-    const token = config.MERCADOPAGO_ACCESS_TOKEN;
-
     let subscription: any = null;
     let plan: any = null;
     let mpStatus = "pending";
@@ -178,59 +162,88 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Step 2 — si no encontramos suscripcion, buscar el plan desde MP y luego la suscripcion del tenant
-    if (!plan && appId) {
-      if (preapprovalId && token && token !== "your_mercadopago_access_token_here") {
-        try {
-          const mpRes = await fetch(`https://api.mercadopago.com/preapproval/${preapprovalId}`, {
-            headers: { "Authorization": `Bearer ${token}` },
-          });
-          if (mpRes.ok) {
-            const mpData = await mpRes.json();
-            mpStatus = mpData.status || "pending";
-            mpPlanId = mpData.preapproval_plan_id || null;
-            const mpExternalRef = mpData.external_reference || null;
+    // Step 2 — consultar MP para obtener status real y datos del preapproval
+    if (preapprovalId) {
+      try {
+        const mpRes = await fetch(`https://api.mercadopago.com/preapproval/${preapprovalId}`, {
+          headers: { "Authorization": `Bearer ${MP_ACCESS_TOKEN}` },
+        });
+        if (mpRes.ok) {
+          const mpData = await mpRes.json();
+          mpStatus = mpData.status || "pending";
+          mpPlanId = mpData.preapproval_plan_id || null;
+          const mpExternalRef = mpData.external_reference || null;
+          const mpPayerEmail = mpData.payer_email || null;
 
-            console.log("MP preapproval status:", mpStatus, "plan_id:", mpPlanId, "external_ref:", mpExternalRef);
+          console.log("MP preapproval:", { mpStatus, mpPlanId, mpExternalRef, mpPayerEmail });
 
-            // Si MP devuelve el external_reference, buscar la suscripcion por ese ID
-            if (mpExternalRef && !subscription) {
-              const { data: subByRef } = await supabase
-                .from("subscriptions")
-                .select("id, status, plan_id, tenant_id, mp_preapproval_id, plans(id, name, application_id, billing_cycle, entitlements)")
-                .eq("id", mpExternalRef)
-                .maybeSingle();
-              if (subByRef) {
-                subscription = subByRef;
-                plan = subByRef.plans;
-              }
-            }
-
-            if (!plan && mpPlanId) {
-              const { data: planData } = await supabase
-                .from("plans")
-                .select("id, name, application_id, entitlements, billing_cycle")
-                .eq("mp_preapproval_plan_id", mpPlanId)
-                .maybeSingle();
-              plan = planData;
+          // 2a — buscar suscripcion por external_reference (= subscription.id que enviamos a MP)
+          if (mpExternalRef && !subscription) {
+            const { data: subByRef } = await supabase
+              .from("subscriptions")
+              .select("id, status, plan_id, tenant_id, mp_preapproval_id, plans(id, name, application_id, billing_cycle, entitlements)")
+              .eq("id", mpExternalRef)
+              .maybeSingle();
+            if (subByRef) {
+              subscription = subByRef;
+              plan = subByRef.plans;
+              console.log("Found subscription by external_reference:", mpExternalRef);
             }
           }
-        } catch (e) {
-          console.error("MP API error:", e);
-        }
-      }
 
-      // Fallback: buscar cualquier plan activo de esta app para obtener application_id y back_url
-      if (!plan) {
-        const { data: anyPlan } = await supabase
-          .from("plans")
-          .select("id, name, application_id, billing_cycle, entitlements")
-          .eq("application_id", appId)
-          .eq("is_active", true)
-          .limit(1)
-          .maybeSingle();
-        plan = anyPlan;
+          // 2b — buscar plan por mp_preapproval_plan_id
+          if (!plan && mpPlanId) {
+            const { data: planData } = await supabase
+              .from("plans")
+              .select("id, name, application_id, entitlements, billing_cycle")
+              .eq("mp_preapproval_plan_id", mpPlanId)
+              .maybeSingle();
+            plan = planData;
+          }
+
+          // 2c — si tenemos plan pero no suscripcion, buscar tenant por payer_email
+          if (plan && !subscription && mpPayerEmail) {
+            const { data: appUser } = await supabase
+              .from("application_users")
+              .select("tenant_id")
+              .eq("application_id", plan.application_id)
+              .or(`external_user_id.eq.${mpPayerEmail},email.eq.${mpPayerEmail}`)
+              .maybeSingle();
+
+            if (appUser?.tenant_id) {
+              const { data: sub } = await supabase
+                .from("subscriptions")
+                .select("id, status, plan_id, tenant_id, mp_preapproval_id, plans(id, name, application_id, billing_cycle, entitlements)")
+                .eq("tenant_id", appUser.tenant_id)
+                .in("status", ["trialing", "active", "pending"])
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              if (sub) {
+                subscription = sub;
+                plan = sub.plans || plan;
+                console.log("Found subscription by payer_email:", mpPayerEmail);
+              }
+            }
+          }
+        } else {
+          console.error("MP API error:", mpRes.status, await mpRes.text());
+        }
+      } catch (e) {
+        console.error("MP API fetch error:", e);
       }
+    }
+
+    // Fallback: buscar plan por app_id si aun no lo tenemos
+    if (!plan && appId) {
+      const { data: anyPlan } = await supabase
+        .from("plans")
+        .select("id, name, application_id, billing_cycle, entitlements")
+        .eq("application_id", appId)
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+      plan = anyPlan;
     }
 
     // Step 3 — si el pago fue aprobado, actualizar suscripcion y licencia
