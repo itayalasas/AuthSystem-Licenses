@@ -175,6 +175,48 @@ async function processMercadoPagoEvent(supabase: any, payload: any) {
 
     console.log('📋 Preapproval event:', { preapprovalId, status, payerEmail, planId });
 
+    // Handle cancellation from MercadoPago portal
+    if (preapprovalId && (status === 'cancelled' || status === 'paused')) {
+      const newStatus = status === 'cancelled' ? 'canceled' : 'paused';
+
+      const { data: subscription } = await supabase
+        .from('subscriptions')
+        .select('id, tenant_id')
+        .eq('mp_preapproval_id', preapprovalId)
+        .maybeSingle();
+
+      if (subscription) {
+        await supabase
+          .from('subscriptions')
+          .update({
+            status: newStatus,
+            canceled_at: new Date().toISOString(),
+            metadata: {
+              cancellation_reason: 'User cancelled via MercadoPago',
+              webhook_event: eventType,
+              cancelled_at: new Date().toISOString(),
+            },
+          })
+          .eq('id', subscription.id);
+
+        // Revoke associated licenses
+        await supabase
+          .from('licenses')
+          .update({
+            status: 'revoked',
+            metadata: {
+              revoked_reason: 'Subscription cancelled by user',
+              revoked_at: new Date().toISOString(),
+            },
+          })
+          .eq('subscription_id', subscription.id)
+          .eq('status', 'active');
+
+        console.log('✅ Subscription cancelled and licenses revoked:', subscription.id);
+      }
+      return;
+    }
+
     if (preapprovalId && status === 'authorized') {
       // Buscar el plan por mp_preapproval_plan_id
       const { data: plan } = await supabase
