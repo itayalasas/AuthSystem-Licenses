@@ -1,7 +1,9 @@
 import { ConfigService } from './config';
 
 const getAdminApiUrl = () => {
-  const supabaseUrl = ConfigService.getVariable('VITE_SUPABASE_URL');
+  const supabaseUrl =
+    ConfigService.getVariable('VITE_SUPABASE_URL') ||
+    import.meta.env.VITE_SUPABASE_URL;
   return `${supabaseUrl}/functions/v1/admin-api`;
 };
 
@@ -191,11 +193,13 @@ class AdminAPIService {
   }
 
   private get headers(): HeadersInit {
-    const supabaseAnonKey = ConfigService.getVariable('VITE_SUPABASE_ANON_KEY');
+    const supabaseAnonKey =
+      ConfigService.getVariable('VITE_SUPABASE_ANON_KEY') ||
+      import.meta.env.VITE_SUPABASE_ANON_KEY;
     return {
       'Content-Type': 'application/json',
       'X-Admin-Token': this.adminToken,
-      'Authorization': `Bearer ${supabaseAnonKey}`,
+      ...(supabaseAnonKey ? { 'Authorization': `Bearer ${supabaseAnonKey}` } : {}),
     };
   }
 
