@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle, Clock, XCircle, PauseCircle, Loader2, AlertCircle } from 'lucide-react';
+import { ConfigService } from '../lib/config';
 
 type PaymentStatus = 'authorized' | 'pending' | 'cancelled' | 'paused' | 'loading' | 'error';
 
@@ -47,9 +48,6 @@ const STATUS_CONFIG: Record<PaymentStatus, {
   },
 };
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-
 export function PaymentCallback() {
   const hasProcessed = useRef(false);
   const [status, setStatus] = useState<PaymentStatus>('loading');
@@ -64,7 +62,7 @@ export function PaymentCallback() {
 
     const params = new URLSearchParams(window.location.search);
 
-    // If the edge function already resolved everything and sent us subscription_status,
+    // If the edge function already resolved everything (has subscription_status param),
     // use those params directly — no need to call confirm-subscription again.
     const alreadyResolved = params.get('subscription_status');
     if (alreadyResolved) {
@@ -94,17 +92,30 @@ export function PaymentCallback() {
       return;
     }
 
-    // Call our confirm-subscription edge function
-    confirmSubscription(preapprovalId, params);
+    // Load config first (uses get-env API), then call confirm-subscription
+    ConfigService.getConfig()
+      .then(() => confirmSubscription(preapprovalId!, params))
+      .catch(() => confirmSubscription(preapprovalId!, params));
   }, []);
 
   async function confirmSubscription(preapprovalId: string, originalParams: URLSearchParams) {
     try {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/confirm-subscription`, {
+      const supabaseUrl = ConfigService.getVariable('VITE_SUPABASE_URL')
+        || ConfigService.getVariable('SUPABASE_URL');
+      const supabaseAnonKey = ConfigService.getVariable('VITE_SUPABASE_ANON_KEY')
+        || ConfigService.getVariable('SUPABASE_ANON_KEY');
+
+      if (!supabaseUrl) {
+        setStatus('error');
+        setErrorDetail('No se pudo obtener la configuración del sistema.');
+        return;
+      }
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/confirm-subscription`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${supabaseAnonKey ?? ''}`,
         },
         body: JSON.stringify({ preapproval_id: preapprovalId }),
       });
@@ -151,7 +162,9 @@ export function PaymentCallback() {
       const decoded = decodeURIComponent(backUrl);
       const url = new URL(decoded);
       params.forEach((v, k) => {
-        if (!['back_url', 'app_id', 'preapproval_id'].includes(k)) url.searchParams.set(k, v);
+        if (!['back_url', 'app_id', 'preapproval_id', 'subscription_status'].includes(k)) {
+          url.searchParams.set(k, v);
+        }
       });
       Object.entries(extra).forEach(([k, v]) => { if (v) url.searchParams.set(k, v); });
       setRedirectUrl(url.toString());
