@@ -32,6 +32,202 @@ async function getConfigFromAPI(): Promise<Record<string, string>> {
   }
 }
 
+async function handleActivateTrial(req: Request, supabase: any): Promise<Response> {
+  try {
+    // Validate external API key from config
+    const providedKey = req.headers.get("X-Api-Key");
+    if (!providedKey) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Missing X-Api-Key header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { data: configRow } = await supabase
+      .from("app_config")
+      .select("variables")
+      .limit(1)
+      .maybeSingle();
+
+    const expectedKey = configRow?.variables?.EXTERNAL_API_KEY;
+    if (!expectedKey || providedKey !== expectedKey) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid API key" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (req.method !== "POST") {
+      return new Response(
+        JSON.stringify({ success: false, error: "Method not allowed" }),
+        { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const body = await req.json();
+    const { application_id, plan_id, tenant_id, external_user_id, user_email } = body;
+
+    if (!application_id || !plan_id) {
+      return new Response(
+        JSON.stringify({ success: false, error: "application_id and plan_id are required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    if (!tenant_id && !external_user_id && !user_email) {
+      return new Response(
+        JSON.stringify({ success: false, error: "One of tenant_id, external_user_id or user_email is required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Resolve tenant
+    let resolvedTenantId: string | null = tenant_id ?? null;
+
+    if (!resolvedTenantId && external_user_id) {
+      const { data: owned } = await supabase.from("tenants").select("id")
+        .eq("owner_user_id", external_user_id).maybeSingle();
+      if (owned) resolvedTenantId = owned.id;
+
+      if (!resolvedTenantId) {
+        const { data: member } = await supabase.from("tenant_members").select("tenant_id")
+          .eq("external_user_id", external_user_id).eq("application_id", application_id).maybeSingle();
+        if (member) resolvedTenantId = member.tenant_id;
+      }
+
+      if (!resolvedTenantId) {
+        const { data: appUser } = await supabase.from("application_users").select("tenant_id, email")
+          .eq("external_user_id", external_user_id).eq("application_id", application_id).maybeSingle();
+        if (appUser?.tenant_id) {
+          resolvedTenantId = appUser.tenant_id;
+        } else if (appUser?.email) {
+          const { data: byEmail } = await supabase.from("tenants").select("id")
+            .eq("owner_email", appUser.email).maybeSingle();
+          if (byEmail) resolvedTenantId = byEmail.id;
+        }
+      }
+    }
+
+    if (!resolvedTenantId && user_email) {
+      const { data: byEmail } = await supabase.from("tenants").select("id")
+        .eq("owner_email", user_email).maybeSingle();
+      if (byEmail) resolvedTenantId = byEmail.id;
+    }
+
+    if (!resolvedTenantId) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Tenant not found for the provided identifiers" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate plan belongs to this application
+    const { data: plan } = await supabase.from("plans").select("*")
+      .eq("id", plan_id).eq("application_id", application_id).maybeSingle();
+
+    if (!plan) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Plan not found or does not belong to this application" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const now = new Date();
+    const trialEnd = plan.trial_days > 0
+      ? new Date(now.getTime() + plan.trial_days * 24 * 60 * 60 * 1000).toISOString()
+      : null;
+    const periodEnd = plan.billing_cycle === "annual"
+      ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString()
+      : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const status = trialEnd ? "trialing" : "active";
+
+    // Upsert subscription
+    const { data: existingSubs } = await supabase.from("subscriptions").select("id")
+      .eq("tenant_id", resolvedTenantId).eq("application_id", application_id)
+      .order("created_at", { ascending: false }).limit(1);
+
+    let subscription: any;
+    if (existingSubs && existingSubs.length > 0) {
+      const { data: updated } = await supabase.from("subscriptions").update({
+        plan_id,
+        status,
+        trial_start: trialEnd ? now.toISOString() : null,
+        trial_end: trialEnd,
+        current_period_start: now.toISOString(),
+        current_period_end: periodEnd,
+        period_start: now.toISOString(),
+        period_end: periodEnd,
+      }).eq("id", existingSubs[0].id).select().single();
+      subscription = updated;
+    } else {
+      const { data: created } = await supabase.from("subscriptions").insert({
+        tenant_id: resolvedTenantId,
+        application_id,
+        plan_id,
+        status,
+        trial_start: trialEnd ? now.toISOString() : null,
+        trial_end: trialEnd,
+        current_period_start: now.toISOString(),
+        current_period_end: periodEnd,
+        period_start: now.toISOString(),
+        period_end: periodEnd,
+      }).select().single();
+      subscription = created;
+
+      await supabase.from("tenant_applications").upsert({
+        tenant_id: resolvedTenantId,
+        application_id,
+        subscription_id: subscription.id,
+      });
+    }
+
+    // Upsert license
+    const licenseKey = `LIC-${plan.name.replace(/\s+/g, '-').toUpperCase()}-${crypto.randomUUID().split('-')[0].toUpperCase()}`;
+    await supabase.from("licenses").upsert({
+      tenant_id: resolvedTenantId,
+      application_id,
+      subscription_id: subscription.id,
+      plan_id,
+      license_key: licenseKey,
+      type: trialEnd ? "trial" : "paid",
+      status: trialEnd ? "trial" : "active",
+      expires_at: trialEnd ?? periodEnd,
+    }, { onConflict: "tenant_id, application_id" });
+
+    // Link application_users.tenant_id if needed
+    if (external_user_id) {
+      await supabase.from("application_users")
+        .update({ tenant_id: resolvedTenantId })
+        .eq("external_user_id", external_user_id)
+        .eq("application_id", application_id)
+        .is("tenant_id", null);
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        data: {
+          subscription_id: subscription.id,
+          tenant_id: resolvedTenantId,
+          plan_id,
+          status,
+          trial_end: trialEnd,
+          period_end: periodEnd,
+        },
+        message: trialEnd
+          ? `Trial activated — expires ${new Date(trialEnd).toISOString().split('T')[0]}`
+          : "Plan activated",
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (error) {
+    console.error("Error in activate-trial:", error);
+    return new Response(
+      JSON.stringify({ success: false, error: error instanceof Error ? error.message : "Internal server error" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -41,6 +237,20 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+
+    const url = new URL(req.url);
+    const path = url.pathname.replace("/admin-api", "").replace(/^\//, "");
+    const method = req.method;
+
+    // activate-trial uses its own external API key — no X-Admin-Token required
+    if (path === "activate-trial") {
+      return await handleActivateTrial(req, supabase);
+    }
+
     const adminToken = req.headers.get("X-Admin-Token");
     if (adminToken !== ADMIN_TOKEN) {
       return new Response(
@@ -51,15 +261,6 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
-
-    const url = new URL(req.url);
-    const path = url.pathname.replace("/admin-api", "").replace(/^\//, "");
-    const method = req.method;
 
     if (path === "stats" && method === "GET") {
       const { data: tenants } = await supabase.from("tenants").select("id");
@@ -1266,174 +1467,6 @@ Deno.serve(async (req: Request) => {
         );
       } catch (error) {
         console.error("Error in register-payment:", error);
-        return new Response(
-          JSON.stringify({ success: false, error: error instanceof Error ? error.message : "Internal server error" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
-
-    // POST activate-trial - Activate a trial plan for a tenant or user
-    // Body: { application_id, plan_id, tenant_id? | external_user_id? | user_email? }
-    if (path === "activate-trial" && method === "POST") {
-      try {
-        const body = await req.json();
-        const { application_id, plan_id, tenant_id, external_user_id, user_email } = body;
-
-        if (!application_id || !plan_id) {
-          return new Response(
-            JSON.stringify({ success: false, error: "application_id and plan_id are required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        if (!tenant_id && !external_user_id && !user_email) {
-          return new Response(
-            JSON.stringify({ success: false, error: "One of tenant_id, external_user_id or user_email is required" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        // Resolve tenant
-        let resolvedTenantId: string | null = tenant_id ?? null;
-
-        if (!resolvedTenantId && external_user_id) {
-          const { data: owned } = await supabase.from("tenants").select("id")
-            .eq("owner_user_id", external_user_id).maybeSingle();
-          if (owned) resolvedTenantId = owned.id;
-
-          if (!resolvedTenantId) {
-            const { data: member } = await supabase.from("tenant_members").select("tenant_id")
-              .eq("external_user_id", external_user_id).eq("application_id", application_id).maybeSingle();
-            if (member) resolvedTenantId = member.tenant_id;
-          }
-
-          if (!resolvedTenantId) {
-            const { data: appUser } = await supabase.from("application_users").select("tenant_id, email")
-              .eq("external_user_id", external_user_id).eq("application_id", application_id).maybeSingle();
-            if (appUser?.tenant_id) {
-              resolvedTenantId = appUser.tenant_id;
-            } else if (appUser?.email) {
-              const { data: byEmail } = await supabase.from("tenants").select("id")
-                .eq("owner_email", appUser.email).maybeSingle();
-              if (byEmail) resolvedTenantId = byEmail.id;
-            }
-          }
-        }
-
-        if (!resolvedTenantId && user_email) {
-          const { data: byEmail } = await supabase.from("tenants").select("id")
-            .eq("owner_email", user_email).maybeSingle();
-          if (byEmail) resolvedTenantId = byEmail.id;
-        }
-
-        if (!resolvedTenantId) {
-          return new Response(
-            JSON.stringify({ success: false, error: "Tenant not found for the provided identifiers" }),
-            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        // Validate plan belongs to this application
-        const { data: plan } = await supabase.from("plans").select("*")
-          .eq("id", plan_id).eq("application_id", application_id).maybeSingle();
-
-        if (!plan) {
-          return new Response(
-            JSON.stringify({ success: false, error: "Plan not found or does not belong to this application" }),
-            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        const now = new Date();
-        const trialEnd = plan.trial_days > 0
-          ? new Date(now.getTime() + plan.trial_days * 24 * 60 * 60 * 1000).toISOString()
-          : null;
-        const periodEnd = plan.billing_cycle === "annual"
-          ? new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString()
-          : new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-        const status = trialEnd ? "trialing" : "active";
-
-        // Upsert subscription
-        const { data: existingSubs } = await supabase.from("subscriptions").select("id")
-          .eq("tenant_id", resolvedTenantId).eq("application_id", application_id)
-          .order("created_at", { ascending: false }).limit(1);
-
-        let subscription: any;
-        if (existingSubs && existingSubs.length > 0) {
-          const { data: updated } = await supabase.from("subscriptions").update({
-            plan_id,
-            status,
-            trial_start: trialEnd ? now.toISOString() : null,
-            trial_end: trialEnd,
-            current_period_start: now.toISOString(),
-            current_period_end: periodEnd,
-            period_start: now.toISOString(),
-            period_end: periodEnd,
-          }).eq("id", existingSubs[0].id).select().single();
-          subscription = updated;
-        } else {
-          const { data: created } = await supabase.from("subscriptions").insert({
-            tenant_id: resolvedTenantId,
-            application_id,
-            plan_id,
-            status,
-            trial_start: trialEnd ? now.toISOString() : null,
-            trial_end: trialEnd,
-            current_period_start: now.toISOString(),
-            current_period_end: periodEnd,
-            period_start: now.toISOString(),
-            period_end: periodEnd,
-          }).select().single();
-          subscription = created;
-
-          await supabase.from("tenant_applications").upsert({
-            tenant_id: resolvedTenantId,
-            application_id,
-            subscription_id: subscription.id,
-          });
-        }
-
-        // Upsert license
-        const licenseKey = `LIC-${plan.name.replace(/\s+/g, '-').toUpperCase()}-${crypto.randomUUID().split('-')[0].toUpperCase()}`;
-        await supabase.from("licenses").upsert({
-          tenant_id: resolvedTenantId,
-          application_id,
-          subscription_id: subscription.id,
-          plan_id,
-          license_key: licenseKey,
-          type: trialEnd ? "trial" : "paid",
-          status: trialEnd ? "trial" : "active",
-          expires_at: trialEnd ?? periodEnd,
-        }, { onConflict: "tenant_id, application_id" });
-
-        // Link application_users.tenant_id if needed
-        if (external_user_id) {
-          await supabase.from("application_users")
-            .update({ tenant_id: resolvedTenantId })
-            .eq("external_user_id", external_user_id)
-            .eq("application_id", application_id)
-            .is("tenant_id", null);
-        }
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            data: {
-              subscription_id: subscription.id,
-              tenant_id: resolvedTenantId,
-              plan_id,
-              status,
-              trial_end: trialEnd,
-              period_end: periodEnd,
-            },
-            message: trialEnd
-              ? `Trial activated — expires ${new Date(trialEnd).toISOString().split('T')[0]}`
-              : "Plan activated",
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      } catch (error) {
-        console.error("Error in activate-trial:", error);
         return new Response(
           JSON.stringify({ success: false, error: error instanceof Error ? error.message : "Internal server error" }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
