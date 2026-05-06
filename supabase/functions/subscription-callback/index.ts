@@ -226,6 +226,45 @@ Deno.serve(async (req: Request) => {
               }
             }
           }
+
+          // 2d — fallback: plan encontrado pero sin tenant. Buscar la suscripcion
+          // trialing más reciente para este plan (o para la aplicacion del plan).
+          // Es seguro porque el usuario acababa de iniciar el flujo de pago desde
+          // su tenant — la suscripción más reciente en trialing es la correcta.
+          if (plan && !subscription) {
+            const { data: sub } = await supabase
+              .from("subscriptions")
+              .select("id, status, plan_id, tenant_id, mp_preapproval_id, plans(id, name, application_id, billing_cycle, entitlements)")
+              .eq("plan_id", plan.id)
+              .in("status", ["trialing", "pending"])
+              .is("mp_preapproval_id", null)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (sub) {
+              subscription = sub;
+              plan = sub.plans || plan;
+              console.log("Found subscription by plan fallback (most recent trialing):", sub.id);
+            }
+          }
+
+          // 2e — fallback por application_id si aun no tenemos suscripcion
+          if (!subscription && appId) {
+            const { data: sub } = await supabase
+              .from("subscriptions")
+              .select("id, status, plan_id, tenant_id, mp_preapproval_id, plans(id, name, application_id, billing_cycle, entitlements)")
+              .eq("application_id", appId)
+              .in("status", ["trialing", "pending"])
+              .is("mp_preapproval_id", null)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (sub) {
+              subscription = sub;
+              plan = sub.plans || plan;
+              console.log("Found subscription by application_id fallback:", sub.id);
+            }
+          }
         } else {
           console.error("MP API error:", mpRes.status, await mpRes.text());
         }
