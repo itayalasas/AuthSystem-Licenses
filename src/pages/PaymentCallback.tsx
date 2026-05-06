@@ -72,9 +72,17 @@ export function PaymentCallback() {
         : 'pending';
       setStatus(resolvedStatus);
       const planNameParam = params.get('plan_name');
-      if (planNameParam) setPlanName(decodeURIComponent(planNameParam));
+      if (planNameParam) setPlanName(planNameParam);
       const backUrl = params.get('back_url');
-      if (backUrl) buildRedirectUrl(decodeURIComponent(backUrl), params);
+      if (backUrl) {
+        buildRedirectUrl(backUrl, params, {
+          subscription_status: alreadyResolved,
+          subscription_id: params.get('subscription_id'),
+          plan_id: params.get('plan_id'),
+          plan_name: planNameParam,
+          preapproval_id: params.get('preapproval_id'),
+        });
+      }
       return;
     }
 
@@ -153,28 +161,33 @@ export function PaymentCallback() {
     }
   }
 
+  // Params that belong only to the admin panel callback — not forwarded to the app
+  const INTERNAL_PARAMS = new Set(['back_url', 'app_id']);
+
   function buildRedirectUrl(
     backUrl: string,
     params: URLSearchParams,
     extra: Record<string, string | null> = {}
   ) {
+    // Avoid double-decoding: only decode if the string contains %
+    const rawUrl = backUrl.includes('%') ? decodeURIComponent(backUrl) : backUrl;
     try {
-      const decoded = decodeURIComponent(backUrl);
-      const url = new URL(decoded);
-      params.forEach((v, k) => {
-        if (!['back_url', 'app_id', 'preapproval_id', 'subscription_status'].includes(k)) {
-          url.searchParams.set(k, v);
-        }
-      });
-      Object.entries(extra).forEach(([k, v]) => { if (v) url.searchParams.set(k, v); });
+      const url = new URL(rawUrl);
+      // Merge extra values (explicit wins over params)
+      const merged: Record<string, string> = {};
+      params.forEach((v, k) => { if (!INTERNAL_PARAMS.has(k)) merged[k] = v; });
+      Object.entries(extra).forEach(([k, v]) => { if (v != null) merged[k] = v; });
+      Object.entries(merged).forEach(([k, v]) => url.searchParams.set(k, v));
       setRedirectUrl(url.toString());
     } catch {
-      const sep = backUrl.includes('?') ? '&' : '?';
-      const extraStr = Object.entries(extra)
-        .filter(([, v]) => v)
-        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v!)}`)
+      const sep = rawUrl.includes('?') ? '&' : '?';
+      const merged: Record<string, string> = {};
+      params.forEach((v, k) => { if (!INTERNAL_PARAMS.has(k)) merged[k] = v; });
+      Object.entries(extra).forEach(([k, v]) => { if (v != null) merged[k] = v; });
+      const qs = Object.entries(merged)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
         .join('&');
-      setRedirectUrl(extraStr ? `${backUrl}${sep}${extraStr}` : backUrl);
+      setRedirectUrl(qs ? `${rawUrl}${sep}${qs}` : rawUrl);
     }
   }
 
