@@ -232,6 +232,10 @@ Deno.serve(async (req: Request) => {
       }
 
       // ── Sync users ──────────────────────────────────────────────────────────
+      // For tenant-only apps, users are members of shared tenants — no personal tenant is created.
+      // For basic/hybrid apps, each user gets their own personal tenant with a subscription.
+      const createPersonalTenants = authType === "basic" || authType === "hybrid";
+
       if (extApp.users?.length) {
         for (const user of extApp.users) {
           if (!user.email?.trim()) continue;
@@ -251,12 +255,14 @@ Deno.serve(async (req: Request) => {
 
           results.users_synced++;
 
-          // Every user always gets their own personal tenant (basic auth path).
-          // For tenant-type apps, users with a tenant_id also belong to a shared tenant (below).
+          if (!createPersonalTenants) continue;
+
+          // basic/hybrid: ensure user has a personal tenant linked to this app
           const { data: personalTenant } = await supabase
             .from("tenants")
             .select("id")
             .eq("owner_user_id", user.id)
+            .is("auth_tenant_id", null)
             .maybeSingle();
 
           let personalTenantId = personalTenant?.id;
